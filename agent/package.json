@@ -1,0 +1,45 @@
+{
+  "name": "lp-battlevault-agent",
+  "version": "1.0.0",
+  "description": "Autonomous agent for LP BattleVault - monitors and settles battles on Uniswap V4",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "agent": "tsx src/index.ts",
+    "settle": "tsx src/commands/settle.ts",
+    "status": "tsx src/commands/status.ts",
+    "test:lifi": "tsx src/tests/lifi.test.ts",
+    "test:arc": "tsx src/tests/arc.test.ts",
+    "test:integration": "tsx src/tests/integration.test.ts",
+    "test:crosschain": "tsx src/tests/crosschain-agent.test.ts",
+    "test:all": "npm run test:arc && npm run test:lifi && npm run test:crosschain && npm run test:integration"
+  },
+  "keywords": [
+    "uniswap",
+    "v4",
+    "agent",
+    "defi",
+    "liquidity",
+    "battle",
+    "lifi",
+    "arc",
+    "cctp",
+    "cross-chain"
+  ],
+  "author": "LP BattleVault Team",
+  "license": "MIT",
+  "dependencies": {
+    "@lifi/sdk": "^3.15.5",
+    "@lifi/types": "^17.59.0",
+    "dotenv": "^16.4.5",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
