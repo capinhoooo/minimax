@@ -2,16 +2,21 @@
 
 /* Custom theme using Tailwind v4 CSS variables */
 @theme {
-  --color-background: #0a0a0f;
-  --color-background-secondary: #12121a;
-  --color-background-tertiary: #1a1a24;
-  --color-border: #1f2937;
-  --color-border-light: #374151;
-  --color-accent-blue: #3b82f6;
+  --color-background: #010101;
+  --color-background-secondary: #0a0a0a;
+  --color-background-tertiary: #141414;
+  --color-border: #1a1a1a;
+  --color-border-light: #2a2a2a;
+  --color-accent-blue: #0e4d9d;
   --color-accent-purple: #8b5cf6;
+  --color-accent-magenta: #ed7f2f;
+  --color-accent-pink: #ed7f2f;
+  --color-accent-cyan: #42c7e6;
   --color-accent-green: #22c55e;
-  --color-accent-red: #ef4444;
-  --color-accent-yellow: #eab308;
+  --color-accent-red: #8a3815;
+  --color-accent-yellow: #ed7f2f;
+  --color-accent-orange: #ed7f2f;
+  --color-accent-rust: #8a3815;
 }
 
 /* Base styles */
@@ -154,6 +159,14 @@ body {
   color: transparent;
 }
 
+.gradient-text-magenta {
+  background: linear-gradient(to right, #ed7f2f, #42c7e6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 40px rgba(237, 127, 47, 0.5), 0 0 80px rgba(237, 127, 47, 0.3);
+}
+
 /* Status badges */
 .status-badge {
   display: inline-flex;
@@ -188,4 +201,121 @@ body {
 .glass {
   background-color: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(16px);
+}
+
+/* Grid background pattern */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(66, 199, 230, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(66, 199, 230, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Terminal card styles */
+.terminal-card {
+  background: linear-gradient(135deg, rgba(10, 10, 10, 0.95), rgba(1, 1, 1, 0.98));
+  border: 1px solid rgba(237, 127, 47, 0.3);
+  border-radius: 12px;
+  box-shadow:
+    0 0 30px rgba(237, 127, 47, 0.15),
+    0 0 60px rgba(237, 127, 47, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.terminal-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+/* Glow button styles */
+.btn-glow-magenta {
+  background: transparent;
+  border: 1px solid #ed7f2f;
+  color: #ed7f2f;
+  padding: 0.75rem 2rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: all 0.3s;
+}
+
+.btn-glow-magenta:hover {
+  background: rgba(237, 127, 47, 0.1);
+  box-shadow: 0 0 20px rgba(237, 127, 47, 0.3);
+}
+
+/* 3D sphere styles */
+.sphere {
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.3), transparent 50%);
+}
+
+.sphere-purple {
+  background-color: #ed7f2f;
+  box-shadow:
+    inset -10px -10px 30px rgba(0, 0, 0, 0.4),
+    inset 5px 5px 20px rgba(255, 255, 255, 0.2),
+    0 0 30px rgba(237, 127, 47, 0.5);
+}
+
+.sphere-cyan {
+  background-color: #42c7e6;
+  box-shadow:
+    inset -10px -10px 30px rgba(0, 0, 0, 0.4),
+    inset 5px 5px 20px rgba(255, 255, 255, 0.2),
+    0 0 30px rgba(66, 199, 230, 0.5);
+}
+
+/* Chart bar animation */
+@keyframes chart-grow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.chart-bar {
+  transform-origin: bottom;
+  animation: chart-grow 1s ease-out forwards;
+}
+
+/* Feature content card */
+.feature-content-card {
+  background: rgba(12, 10, 20, 0.6);
+  border: 1px solid rgba(75, 85, 99, 0.3);
+  position: relative;
+}
+
+.feature-content-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(75, 85, 99, 0.3), transparent, rgba(75, 85, 99, 0.1));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Pulse animation for live indicator */
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse-dot 2s ease-in-out infinite;
 }
