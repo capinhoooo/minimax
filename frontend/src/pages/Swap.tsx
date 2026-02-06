@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { ArrowDown, Settings, ChevronDown } from 'lucide-react';
 
 const tokens = [
@@ -22,24 +22,27 @@ type TabType = 'swap' | 'bridge';
 
 export default function Swap() {
   const [searchParams] = useSearchParams();
-  const initialTab = searchParams.get('tab') === 'bridge' ? 'bridge' : 'swap';
+  const location = useLocation();
+  const isBridgeRoute = location.pathname === '/bridge';
+  const initialTab = isBridgeRoute || searchParams.get('tab') === 'bridge' ? 'bridge' : 'swap';
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
 
   // Update active tab when URL changes
   useEffect(() => {
-    const tab = searchParams.get('tab');
-    if (tab === 'bridge') {
+    if (location.pathname === '/bridge') {
+      setActiveTab('bridge');
+    } else if (searchParams.get('tab') === 'bridge') {
       setActiveTab('bridge');
     } else {
       setActiveTab('swap');
     }
-  }, [searchParams]);
+  }, [searchParams, location.pathname]);
 
   const [sellToken, setSellToken] = useState('ETH');
   const [buyToken, setBuyToken] = useState('USDC');
   const [sellAmount, setSellAmount] = useState('0.5');
-  const [fromChain, setFromChain] = useState('ARB');
-  const [toChain, setToChain] = useState('BASE');
+  const [fromChain] = useState('ARB');
+  const [toChain] = useState('BASE');
   const [bridgeAmount, setBridgeAmount] = useState('');
 
   const handleSwapTokens = () => {
