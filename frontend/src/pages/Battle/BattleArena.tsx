@@ -1,144 +1,203 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Swords, Clock, DollarSign } from 'lucide-react';
-import { formatAddress, formatUSD, formatTimeRemaining, getStatusBadgeClass, formatStatus } from '../../lib/utils';
+import { Search } from 'lucide-react';
 
-// Mock data for now - will be replaced with contract reads
-const mockBattles = [
+// Mock pool data
+const pools = [
   {
-    id: 1n,
-    creator: '0x1234567890123456789012345678901234567890',
-    opponent: '0x0000000000000000000000000000000000000000',
-    status: 'waiting_for_opponent',
-    totalValueUSD: 245000000000n, // $2,450 with 8 decimals
-    duration: 86400n,
-    startTime: 0n,
-    timeRemaining: 0,
+    id: 1,
+    token0: 'ETH',
+    token1: 'USDC',
+    apy: 12.4,
+    tier: '0.05%',
+    liquidity: '$14.2M',
+    volume24h: '$2.8M',
+    activeBattles: 4,
+    chartData: [35, 45, 30, 55, 70, 50, 80, 65],
   },
   {
-    id: 2n,
-    creator: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
-    opponent: '0x9876543210987654321098765432109876543210',
-    status: 'ongoing',
-    totalValueUSD: 512000000000n, // $5,120
-    duration: 86400n,
-    startTime: BigInt(Math.floor(Date.now() / 1000) - 20000),
-    timeRemaining: 66400,
+    id: 2,
+    token0: 'WBTC',
+    token1: 'ETH',
+    apy: 8.1,
+    tier: '0.30%',
+    liquidity: '$8.5M',
+    volume24h: '$1.1M',
+    activeBattles: 1,
+    chartData: [40, 35, 50, 45, 55, 40, 60, 50],
+  },
+  {
+    id: 3,
+    token0: 'DAI',
+    token1: 'USDC',
+    apy: 4.2,
+    tier: '0.01%',
+    liquidity: '$22.1M',
+    volume24h: '$14.5M',
+    activeBattles: 0,
+    chartData: [50, 52, 51, 53, 52, 54, 53, 55],
   },
 ];
 
 export default function BattleArena() {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredPools = pools.filter(
+    (pool) =>
+      pool.token0.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      pool.token1.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    <div className="py-8 px-4">
-      <div className="mx-auto max-w-7xl">
+    <div className="min-h-screen grid-bg">
+      <div className="max-w-7xl mx-auto px-4 py-12">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Battle Arena</h1>
-            <p className="text-gray-400">Find opponents and enter LP position battles</p>
+        <h1 className="text-4xl sm:text-5xl font-black mb-8 tracking-tight">
+          <span style={{ color: '#ed7f2f' }}>SELECT</span>{' '}
+          <span style={{ color: '#42c7e6' }}>YOUR BATTLEFIELD</span>
+        </h1>
+
+        {/* Search Bar */}
+        <div className="relative mb-10">
+          <div
+            className="flex items-center gap-3 px-4 py-3 rounded-lg"
+            style={{
+              background: 'rgba(10, 10, 10, 0.6)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+            }}
+          >
+            <Search className="h-4 w-4 text-gray-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="SEARCH PAIR OR HOOK ADDRESS..."
+              className="flex-1 bg-transparent text-sm text-gray-400 placeholder-gray-600 outline-none font-mono tracking-wider"
+            />
           </div>
-          <Link to="/battle/create" className="btn-primary flex items-center gap-2">
-            <Plus className="h-5 w-5" />
-            Create Battle
-          </Link>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap gap-4 mb-8">
-          <select className="input max-w-[150px]">
-            <option value="all">All Status</option>
-            <option value="open">Open</option>
-            <option value="ongoing">Ongoing</option>
-            <option value="resolved">Resolved</option>
-          </select>
-          <select className="input max-w-[150px]">
-            <option value="all">All Pools</option>
-            <option value="weth-usdc">WETH/USDC</option>
-            <option value="wbtc-usdc">WBTC/USDC</option>
-          </select>
-          <select className="input max-w-[150px]">
-            <option value="range">Range Battle</option>
-            <option value="fee">Fee Battle</option>
-          </select>
-        </div>
-
-        {/* Battle Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {mockBattles.map((battle) => (
-            <Link
-              key={battle.id.toString()}
-              to={`/battle/${battle.id}`}
-              className="card-hover"
+        {/* Pool Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredPools.map((pool) => (
+            <div
+              key={pool.id}
+              className="rounded-xl overflow-hidden"
+              style={{
+                background: 'linear-gradient(135deg, rgba(10, 10, 10, 0.95), rgba(1, 1, 1, 0.98))',
+                border: '1px solid rgba(237, 127, 47, 0.3)',
+                boxShadow: '0 0 30px rgba(237, 127, 47, 0.1)',
+              }}
             >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-accent-blue/10">
-                    <Swords className="h-6 w-6 text-accent-blue" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">Battle #{battle.id.toString()}</h3>
-                    <p className="text-sm text-gray-400">WETH/USDC • Range Battle</p>
-                  </div>
+              <div className="p-5">
+                {/* Pool Header */}
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xl font-bold text-white">
+                    {pool.token0} / {pool.token1}
+                  </h3>
+                  <span
+                    className="text-sm font-mono font-semibold"
+                    style={{ color: '#22c55e' }}
+                  >
+                    +{pool.apy}% <span className="text-xs">APY</span>
+                  </span>
                 </div>
-                <span className={getStatusBadgeClass(battle.status)}>
-                  {formatStatus(battle.status)}
-                </span>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-gray-400" />
-                  <div>
-                    <p className="text-xs text-gray-400">Total Value</p>
-                    <p className="font-medium">{formatUSD(battle.totalValueUSD)}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-gray-400" />
-                  <div>
-                    <p className="text-xs text-gray-400">
-                      {battle.status === 'waiting_for_opponent' ? 'Duration' : 'Time Left'}
-                    </p>
-                    <p className="font-medium">
-                      {battle.status === 'waiting_for_opponent'
-                        ? '24 hours'
-                        : formatTimeRemaining(battle.timeRemaining)
-                      }
-                    </p>
-                  </div>
-                </div>
-              </div>
+                {/* Tier */}
+                <p className="text-xs font-mono text-gray-500 mb-4 tracking-wider">
+                  TIER: {pool.tier}
+                </p>
 
-              <div className="flex items-center justify-between pt-4 border-t border-border">
-                <div>
-                  <p className="text-xs text-gray-400">Creator</p>
-                  <p className="font-mono text-sm">{formatAddress(battle.creator)}</p>
+                {/* Chart */}
+                <div className="h-20 flex items-end justify-between gap-1 mb-4">
+                  {pool.chartData.map((height, index) => (
+                    <div
+                      key={index}
+                      className="flex-1 rounded-t"
+                      style={{
+                        height: `${height}%`,
+                        background: 'linear-gradient(to top, rgba(66, 199, 230, 0.8), rgba(66, 199, 230, 0.4))',
+                      }}
+                    />
+                  ))}
                 </div>
-                {battle.opponent !== '0x0000000000000000000000000000000000000000' ? (
-                  <div className="text-right">
-                    <p className="text-xs text-gray-400">Opponent</p>
-                    <p className="font-mono text-sm">{formatAddress(battle.opponent)}</p>
+
+                {/* Stats */}
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono text-gray-500 tracking-wider">LIQUIDITY:</span>
+                    <span className="text-sm font-mono text-white">{pool.liquidity}</span>
                   </div>
-                ) : (
-                  <button className="btn-primary text-sm py-1.5 px-4">
-                    Join Battle
-                  </button>
-                )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono text-gray-500 tracking-wider">VOL (24H):</span>
+                    <span className="text-sm font-mono text-white">{pool.volume24h}</span>
+                  </div>
+                </div>
+
+                {/* Active Battles Badge */}
+                <div
+                  className="flex items-center gap-2 px-3 py-2 rounded mb-4"
+                  style={{
+                    background: pool.activeBattles > 0
+                      ? 'rgba(34, 197, 94, 0.1)'
+                      : 'rgba(255, 255, 255, 0.05)',
+                    border: pool.activeBattles > 0
+                      ? '1px solid rgba(34, 197, 94, 0.3)'
+                      : '1px solid rgba(255, 255, 255, 0.1)',
+                  }}
+                >
+                  <div
+                    className="w-2 h-2 rounded-full"
+                    style={{
+                      backgroundColor: pool.activeBattles > 0 ? '#22c55e' : '#6b7280',
+                    }}
+                  />
+                  <span
+                    className="text-xs font-mono tracking-wider"
+                    style={{
+                      color: pool.activeBattles > 0 ? '#22c55e' : '#6b7280',
+                    }}
+                  >
+                    {pool.activeBattles > 0
+                      ? `${pool.activeBattles} ACTIVE BATTLE${pool.activeBattles > 1 ? 'S' : ''}`
+                      : 'NO ACTIVE BATTLES'}
+                  </span>
+                </div>
+
+                {/* Action Button */}
+                <Link
+                  to={`/battle/${pool.id}`}
+                  className="block w-full py-3 rounded-lg text-center font-medium text-sm tracking-wider transition-all hover:opacity-90"
+                  style={{
+                    background: pool.activeBattles > 0
+                      ? 'linear-gradient(135deg, rgba(237, 127, 47, 0.2), rgba(138, 56, 21, 0.2))'
+                      : 'rgba(255, 255, 255, 0.05)',
+                    border: pool.activeBattles > 0
+                      ? '1px solid rgba(237, 127, 47, 0.5)'
+                      : '1px solid rgba(255, 255, 255, 0.1)',
+                    color: pool.activeBattles > 0 ? '#ed7f2f' : '#9ca3af',
+                  }}
+                >
+                  {pool.activeBattles > 0 ? 'ENTER ARENA' : 'OPEN POOL'}
+                </Link>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
 
         {/* Empty State */}
-        {mockBattles.length === 0 && (
+        {filteredPools.length === 0 && (
           <div className="text-center py-16">
-            <Swords className="h-16 w-16 text-gray-600 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No Battles Found</h3>
-            <p className="text-gray-400 mb-6">Be the first to create a battle!</p>
-            <Link to="/battle/create" className="btn-primary">
-              Create Battle
-            </Link>
+            <p className="text-gray-500 font-mono">No pools found matching your search.</p>
           </div>
         )}
+
+        {/* Terminal Status Footer */}
+        <div className="mt-16 text-center">
+          <p className="text-xs font-mono text-gray-600 tracking-wider">
+            TERMINAL STATUS: <span style={{ color: '#22c55e' }}>ONLINE</span> // BLOCK: 18492031 // ARENA_V4_CORE
+          </p>
+        </div>
       </div>
     </div>
   );
