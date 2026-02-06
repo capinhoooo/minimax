@@ -12,8 +12,9 @@ import BattleArena from './pages/Battle/BattleArena';
 import BattleDetail from './pages/Battle/BattleDetail';
 import CreateBattle from './pages/Battle/CreateBattle';
 import Swap from './pages/Swap';
-import Bridge from './pages/Bridge';
 import Agent from './pages/Agent';
+import Leaderboard from './pages/Leaderboard';
+import Lobby from './pages/Lobby';
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -36,8 +37,10 @@ function App() {
               <Route path="battle" element={<BattleArena />} />
               <Route path="battle/:id" element={<BattleDetail />} />
               <Route path="battle/create" element={<CreateBattle />} />
+              <Route path="leaderboard" element={<Leaderboard />} />
               <Route path="swap" element={<Swap />} />
-              <Route path="bridge" element={<Bridge />} />
+              <Route path="bridge" element={<Swap />} />
+              <Route path="lobby" element={<Lobby />} />
               <Route path="agent" element={<Agent />} />
             </Route>
           </Routes>
