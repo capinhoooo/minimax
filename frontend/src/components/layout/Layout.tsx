@@ -5,7 +5,7 @@ export default function Layout() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
-      <main className="flex-1">
+      <main className="flex-1 pt-20 md:pt-16">
         <Outlet />
       </main>
       <footer className="border-t border-border py-6 px-4">
