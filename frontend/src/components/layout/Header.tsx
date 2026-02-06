@@ -1,11 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Wallet } from 'lucide-react';
+import logo from '../../assets/logo.png';
 
 const navigation = [
-  { name: 'DASHBOARD', href: '/' },
+  { name: 'LOBBY', href: '/lobby' },
   { name: 'BATTLES', href: '/battle', hasBadge: true },
   { name: 'LEADERBOARD', href: '/leaderboard' },
-  { name: 'MY POSITIONS', href: '/positions' },
+  { name: 'SWAP / BRIDGE', href: '/swap' },
 ];
 
 export default function Header() {
@@ -28,42 +29,8 @@ export default function Header() {
       >
         <div className="flex items-center justify-between gap-4">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-3 flex-shrink-0">
-            {/* Logo Icon */}
-            <div
-              className="w-9 h-9 flex items-center justify-center rounded-lg"
-              style={{
-                background: 'linear-gradient(135deg, rgba(66, 199, 230, 0.15), rgba(14, 77, 157, 0.15))',
-                border: '1px solid rgba(66, 199, 230, 0.3)',
-              }}
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#42c7e6"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-              </svg>
-            </div>
-            {/* Logo Text */}
-            <div className="hidden sm:block">
-              <div className="flex items-baseline">
-                <span className="text-base font-bold tracking-wide" style={{ color: '#42c7e6' }}>
-                  LIQUID
-                </span>
-                <span className="text-base font-bold tracking-wide text-white">
-                  WARS
-                </span>
-              </div>
-              <p className="text-[9px] font-mono tracking-widest text-gray-600 -mt-0.5">
-                PVP PROTOCOL
-              </p>
-            </div>
+          <Link to="/" className="flex items-center flex-shrink-0">
+            <img src={logo} alt="Minimax" className="h-12" />
           </Link>
 
           {/* Navigation */}
@@ -86,12 +53,6 @@ export default function Header() {
                 >
                   <span className="flex items-center gap-2">
                     {item.name}
-                    {item.hasBadge && (
-                      <span
-                        className="w-1.5 h-1.5 rounded-full"
-                        style={{ backgroundColor: '#ed7f2f' }}
-                      />
-                    )}
                   </span>
                 </Link>
               );
@@ -100,24 +61,6 @@ export default function Header() {
 
           {/* Right Section */}
           <div className="flex items-center gap-3 flex-shrink-0">
-            {/* Gas Info */}
-            <div className="hidden lg:flex items-center gap-1.5 text-[10px] font-mono">
-              <span className="text-gray-600">GAS:</span>
-              <span className="text-gray-400">12</span>
-              <span className="text-gray-600">GWEI</span>
-            </div>
-
-            {/* Divider */}
-            <div className="hidden lg:block w-px h-4 bg-gray-800" />
-
-            {/* Version */}
-            <div className="hidden lg:flex items-center gap-1.5 text-[10px] font-mono">
-              <span
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ backgroundColor: '#22c55e' }}
-              />
-              <span className="text-gray-600">v2.4.0</span>
-            </div>
 
             {/* Connect Wallet Button */}
             <button
