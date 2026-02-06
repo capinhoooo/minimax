@@ -52,10 +52,28 @@ export default function BattleArena() {
     <div className="min-h-screen grid-bg">
       <div className="max-w-7xl mx-auto px-4 py-12">
         {/* Header */}
-        <h1 className="text-4xl sm:text-5xl font-black mb-8 tracking-tight">
-          <span style={{ color: '#ed7f2f' }}>SELECT</span>{' '}
-          <span style={{ color: '#42c7e6' }}>YOUR BATTLEFIELD</span>
-        </h1>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-12">
+          <div>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black mb-3 tracking-tight">
+              <span className="gradient-text-magenta italic">SELECT YOUR BATTLEFIELD</span>
+            </h1>
+            <p className="text-xs sm:text-sm tracking-[0.3em] text-gray-500 uppercase font-mono">
+              Choose a pool and enter the arena
+            </p>
+          </div>
+          <Link
+            to="/battle/create"
+            className="flex-shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-lg font-bold text-xs tracking-wider transition-all hover:opacity-90 self-start"
+            style={{
+              background: 'linear-gradient(135deg, rgba(237, 127, 47, 0.2), rgba(138, 56, 21, 0.2))',
+              border: '1px solid rgba(237, 127, 47, 0.5)',
+              color: '#ed7f2f',
+              boxShadow: '0 0 15px rgba(237, 127, 47, 0.15)',
+            }}
+          >
+            + INITIALIZE BATTLE
+          </Link>
+        </div>
 
         {/* Search Bar */}
         <div className="relative mb-10">

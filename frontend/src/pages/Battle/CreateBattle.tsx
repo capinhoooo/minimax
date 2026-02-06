@@ -1,175 +1,356 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Swords, Zap, Clock, AlertCircle } from 'lucide-react';
-import { useAccount } from 'wagmi';
-import { DURATION_OPTIONS } from '../../types';
+
+const poolOptions = [
+  { label: 'ETH / USDC (0.05%)', token0: 'ETH', token1: 'USDC', tier: '0.05%' },
+  { label: 'WBTC / ETH (0.3%)', token0: 'WBTC', token1: 'ETH', tier: '0.3%' },
+  { label: 'DAI / USDC (0.01%)', token0: 'DAI', token1: 'USDC', tier: '0.01%' },
+  { label: 'PEPE / ETH (1.0%)', token0: 'PEPE', token1: 'ETH', tier: '1.0%' },
+];
+
+const durationOptions = [
+  { label: '1 HOUR', value: 3600 },
+  { label: '24 HOURS', value: 86400 },
+  { label: '7 DAYS', value: 604800 },
+  { label: 'ENDLESS', value: 0 },
+];
 
 export default function CreateBattle() {
-  const { isConnected } = useAccount();
-  const [battleType, setBattleType] = useState<'range' | 'fee'>('range');
-  const [selectedPosition, setSelectedPosition] = useState<string | null>(null);
+  const [selectedPool, setSelectedPool] = useState(0);
+  const [stakeAmount, setStakeAmount] = useState('');
+  const [minTick, setMinTick] = useState(195400);
+  const [maxTick, setMaxTick] = useState(210200);
   const [duration, setDuration] = useState(86400);
+  const [entryFee, setEntryFee] = useState('0.01');
 
-  // Mock positions - will be replaced with actual position data
-  const positions = [
-    { id: '42', pool: 'WETH/USDC', value: '$2,450', inRange: true },
-    { id: '38', pool: 'WETH/USDC', value: '$1,800', inRange: true },
-    { id: '35', pool: 'ARB/ETH', value: '$950', inRange: false },
-  ];
+  const pool = poolOptions[selectedPool];
 
-  if (!isConnected) {
-    return (
-      <div className="py-8 px-4">
-        <div className="mx-auto max-w-2xl text-center">
-          <AlertCircle className="h-16 w-16 text-accent-yellow mx-auto mb-4" />
-          <h1 className="text-2xl font-bold mb-2">Connect Wallet</h1>
-          <p className="text-gray-400 mb-6">Please connect your wallet to create a battle.</p>
-          <Link to="/battle" className="btn-secondary">
-            Back to Arena
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  const concentration = useMemo(() => {
+    const range = maxTick - minTick;
+    if (range <= 0) return 1;
+    return Math.max(1, (50000 / range)).toFixed(1);
+  }, [minTick, maxTick]);
+
+  const estimatedApy = useMemo(() => {
+    const base = 42.8;
+    const conc = parseFloat(concentration);
+    return (base * (conc / 3)).toFixed(1);
+  }, [concentration]);
 
   return (
-    <div className="py-8 px-4">
-      <div className="mx-auto max-w-2xl">
-        {/* Back Link */}
-        <Link to="/battle" className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-6">
-          <ArrowLeft className="h-4 w-4" />
-          Back to Arena
-        </Link>
+    <div className="min-h-screen grid-bg">
+      <div className="max-w-7xl mx-auto px-4 py-12">
+        {/* Title */}
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black mb-3 tracking-tight">
+          <span className="gradient-text-magenta italic">INITIALIZE BATTLE</span>
+        </h1>
+        <p className="text-xs sm:text-sm tracking-[0.2em] text-gray-500 mb-12 uppercase font-mono">
+          Configure your position parameters and challenge the market
+        </p>
 
-        <h1 className="text-3xl font-bold mb-8">Create Battle</h1>
-
-        {/* Step 1: Battle Type */}
-        <div className="card mb-6">
-          <h2 className="text-lg font-semibold mb-4">Step 1: Select Battle Type</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <button
-              onClick={() => setBattleType('range')}
-              className={`p-4 rounded-xl border-2 text-left transition-all ${
-                battleType === 'range'
-                  ? 'border-accent-blue bg-accent-blue/10'
-                  : 'border-border hover:border-gray-600'
-              }`}
+        {/* Two Column Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Column - Form */}
+          <div
+            className="rounded-xl overflow-hidden"
+            style={{
+              border: '1px solid rgba(237, 127, 47, 0.3)',
+              boxShadow: '0 0 30px rgba(237, 127, 47, 0.1)',
+            }}
+          >
+            {/* Purple Header Bar */}
+            <div
+              className="flex items-center gap-2 px-4 py-2"
+              style={{
+                background: 'linear-gradient(90deg, #c026d3, #a855f7, #c026d3)',
+              }}
             >
-              <Zap className={`h-8 w-8 mb-2 ${battleType === 'range' ? 'text-accent-blue' : 'text-gray-400'}`} />
-              <h3 className="font-semibold mb-1">Range Battle</h3>
-              <p className="text-sm text-gray-400">Win by staying in-range longer</p>
-            </button>
+              <div className="w-2.5 h-2.5 rounded-sm bg-white/30" />
+              <span className="text-xs font-mono font-bold tracking-wider text-white">
+                PARAM_INIT_SEQUENCE_V4.02
+              </span>
+            </div>
 
-            <button
-              onClick={() => setBattleType('fee')}
-              className={`p-4 rounded-xl border-2 text-left transition-all ${
-                battleType === 'fee'
-                  ? 'border-accent-purple bg-accent-purple/10'
-                  : 'border-border hover:border-gray-600'
-              }`}
+            <div
+              className="p-6 space-y-6"
+              style={{ background: 'rgba(5, 5, 5, 0.95)' }}
             >
-              <Swords className={`h-8 w-8 mb-2 ${battleType === 'fee' ? 'text-accent-purple' : 'text-gray-400'}`} />
-              <h3 className="font-semibold mb-1">Fee Battle</h3>
-              <p className="text-sm text-gray-400">Win by earning more fees</p>
-            </button>
+              {/* Arena Pool Selection */}
+              <div>
+                <label className="block text-xs font-mono font-bold tracking-wider mb-2" style={{ color: '#42c7e6' }}>
+                  ARENA POOL SELECTION
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedPool}
+                    onChange={(e) => setSelectedPool(Number(e.target.value))}
+                    className="w-full px-4 py-3 rounded-lg text-sm font-mono text-gray-300 appearance-none cursor-pointer outline-none"
+                    style={{
+                      background: 'rgba(15, 15, 15, 0.9)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                    }}
+                  >
+                    {poolOptions.map((p, i) => (
+                      <option key={i} value={i}>{p.label}</option>
+                    ))}
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <svg width="12" height="8" viewBox="0 0 12 8" fill="none">
+                      <path d="M1 1L6 6L11 1" stroke="#ed7f2f" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stake Amount */}
+              <div>
+                <label className="block text-xs font-mono font-bold tracking-wider mb-2" style={{ color: '#42c7e6' }}>
+                  STAKE AMOUNT (LIQUIDITY)
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={stakeAmount}
+                    onChange={(e) => setStakeAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full px-4 py-3 rounded-lg text-sm font-mono text-gray-300 outline-none placeholder-gray-600"
+                    style={{
+                      background: 'rgba(15, 15, 15, 0.9)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                    }}
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-gray-400">
+                    {pool.token0}
+                  </span>
+                </div>
+              </div>
+
+              {/* Battle Range (Ticks) */}
+              <div>
+                <label className="block text-xs font-mono font-bold tracking-wider mb-2" style={{ color: '#42c7e6' }}>
+                  BATTLE RANGE (TICKS)
+                </label>
+                <div
+                  className="rounded-lg p-4 space-y-4"
+                  style={{
+                    border: '1px dashed rgba(255, 255, 255, 0.15)',
+                    background: 'rgba(10, 10, 10, 0.5)',
+                  }}
+                >
+                  {/* Min/Max Labels */}
+                  <div className="flex justify-between">
+                    <span className="text-xs font-mono text-gray-500">
+                      MIN: {minTick.toLocaleString()}
+                    </span>
+                    <span className="text-xs font-mono text-gray-500">
+                      MAX: {maxTick.toLocaleString()}
+                    </span>
+                  </div>
+
+                  {/* Min Tick Slider */}
+                  <input
+                    type="range"
+                    min={180000}
+                    max={220000}
+                    value={minTick}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      if (val < maxTick) setMinTick(val);
+                    }}
+                    className="w-full accent-cyan-400"
+                    style={{ accentColor: '#42c7e6' }}
+                  />
+
+                  {/* Max Tick Slider */}
+                  <input
+                    type="range"
+                    min={180000}
+                    max={220000}
+                    value={maxTick}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      if (val > minTick) setMaxTick(val);
+                    }}
+                    className="w-full"
+                    style={{ accentColor: '#42c7e6' }}
+                  />
+
+                  {/* Concentration */}
+                  <p className="text-center text-xs font-mono tracking-wider text-gray-400">
+                    CONCENTRATION: <span style={{ color: '#42c7e6' }}>{concentration}x</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Battle Duration */}
+              <div>
+                <label className="block text-xs font-mono font-bold tracking-wider mb-2" style={{ color: '#42c7e6' }}>
+                  BATTLE DURATION
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {durationOptions.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setDuration(opt.value)}
+                      className="px-3 py-2.5 rounded-lg text-xs font-mono font-bold tracking-wider transition-all"
+                      style={{
+                        background: duration === opt.value
+                          ? 'rgba(66, 199, 230, 0.15)'
+                          : 'rgba(15, 15, 15, 0.9)',
+                        border: duration === opt.value
+                          ? '1px solid rgba(66, 199, 230, 0.5)'
+                          : '1px solid rgba(255, 255, 255, 0.1)',
+                        color: duration === opt.value ? '#42c7e6' : '#6b7280',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Arena Entry Fee */}
+              <div>
+                <label className="block text-xs font-mono font-bold tracking-wider mb-2" style={{ color: '#42c7e6' }}>
+                  ARENA ENTRY FEE (BURN)
+                </label>
+                <input
+                  type="number"
+                  value={entryFee}
+                  onChange={(e) => setEntryFee(e.target.value)}
+                  placeholder="0.01"
+                  className="w-full px-4 py-3 rounded-lg text-sm font-mono text-gray-300 outline-none placeholder-gray-600"
+                  style={{
+                    background: 'rgba(15, 15, 15, 0.9)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                  }}
+                />
+              </div>
+            </div>
           </div>
-        </div>
 
-        {/* Step 2: Select Position */}
-        <div className="card mb-6">
-          <h2 className="text-lg font-semibold mb-4">Step 2: Select Your LP Position</h2>
-          <div className="space-y-3">
-            {positions.map((pos) => (
-              <button
-                key={pos.id}
-                onClick={() => setSelectedPosition(pos.id)}
-                className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
-                  selectedPosition === pos.id
-                    ? 'border-accent-blue bg-accent-blue/10'
-                    : 'border-border hover:border-gray-600'
-                }`}
+          {/* Right Column - Preview */}
+          <div className="space-y-6">
+            <p className="text-center text-sm font-mono text-gray-500 tracking-wider">
+              Real-time Deployment Preview
+            </p>
+
+            {/* Preview Card */}
+            <div
+              className="rounded-xl overflow-hidden relative"
+              style={{
+                border: '1px solid rgba(237, 127, 47, 0.3)',
+                boxShadow: '0 0 30px rgba(237, 127, 47, 0.1)',
+                background: 'rgba(5, 5, 5, 0.95)',
+              }}
+            >
+              {/* Corner Badge */}
+              <div
+                className="absolute top-0 right-0 overflow-hidden w-24 h-24 pointer-events-none"
               >
-                <div className="flex items-center justify-between">
+                <div
+                  className="absolute top-3 -right-6 rotate-45 text-[9px] font-mono font-bold tracking-wider py-1 px-8 text-center"
+                  style={{
+                    background: 'linear-gradient(90deg, #c026d3, #a855f7)',
+                    color: 'white',
+                  }}
+                >
+                  BATTLE_MODE
+                </div>
+              </div>
+
+              <div className="p-6">
+                {/* Pool Name */}
+                <h3 className="text-xl font-black text-center mb-1 tracking-wide" style={{ color: '#42c7e6' }}>
+                  {pool.token0}/{pool.token1} ARENA
+                </h3>
+                <div className="w-12 h-0.5 mx-auto mb-6" style={{ background: '#42c7e6' }} />
+
+                {/* Stake & APY */}
+                <div className="flex justify-between items-start mb-6">
                   <div>
-                    <p className="font-semibold">Position #{pos.id}</p>
-                    <p className="text-sm text-gray-400">{pos.pool}</p>
+                    <p className="text-[10px] font-mono tracking-wider text-gray-500 mb-1">YOUR STAKE</p>
+                    <p className="text-lg font-black" style={{ color: '#42c7e6' }}>
+                      {stakeAmount || '0.00'} {pool.token0}
+                    </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold">{pos.value}</p>
-                    <p className={`text-sm ${pos.inRange ? 'text-accent-green' : 'text-accent-red'}`}>
-                      {pos.inRange ? 'In Range' : 'Out of Range'}
+                    <p className="text-[10px] font-mono tracking-wider text-gray-500 mb-1">EST. APY</p>
+                    <p className="text-lg font-black" style={{ color: '#22c55e' }}>
+                      {estimatedApy}%
                     </p>
                   </div>
                 </div>
-              </button>
-            ))}
-          </div>
-          <p className="text-sm text-gray-400 mt-4">
-            Don't have a position?{' '}
-            <Link to="/swap" className="text-accent-blue hover:underline">
-              Add liquidity first
-            </Link>
-          </p>
-        </div>
 
-        {/* Step 3: Duration */}
-        <div className="card mb-6">
-          <h2 className="text-lg font-semibold mb-4">Step 3: Set Battle Duration</h2>
-          <div className="flex items-center gap-2 mb-4">
-            <Clock className="h-5 w-5 text-gray-400" />
-            <select
-              value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
-              className="input flex-1"
+                {/* Tick Range Box */}
+                <div
+                  className="rounded-lg p-4 mb-6"
+                  style={{
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    background: 'rgba(10, 10, 10, 0.8)',
+                  }}
+                >
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-mono text-gray-500 tracking-wider">TICK_RANGE_L:</span>
+                    <span className="text-sm font-mono text-white">{minTick.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-mono text-gray-500 tracking-wider">TICK_RANGE_H:</span>
+                    <span className="text-sm font-mono text-white">{maxTick.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Protocol Fee & Slippage */}
+            <div className="grid grid-cols-2 gap-4">
+              <div
+                className="rounded-lg p-4 text-center"
+                style={{
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  background: 'rgba(5, 5, 5, 0.95)',
+                }}
+              >
+                <p className="text-[10px] font-mono tracking-wider text-gray-500 mb-1">PROTOCOL FEE</p>
+                <p className="text-lg font-black text-white">{entryFee || '0.01'} ETH</p>
+              </div>
+              <div
+                className="rounded-lg p-4 text-center"
+                style={{
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  background: 'rgba(5, 5, 5, 0.95)',
+                }}
+              >
+                <p className="text-[10px] font-mono tracking-wider text-gray-500 mb-1">SLIPPAGE TOLERANCE</p>
+                <p className="text-lg font-black text-white">0.5%</p>
+              </div>
+            </div>
+
+            {/* Enter Arena Button */}
+            <button
+              className="w-full py-4 rounded-lg text-center font-black text-lg tracking-widest transition-all hover:opacity-90"
+              style={{
+                background: 'transparent',
+                border: '2px solid rgba(237, 127, 47, 0.6)',
+                color: '#ed7f2f',
+                boxShadow: '0 0 20px rgba(237, 127, 47, 0.15)',
+              }}
             >
-              {DURATION_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+              ENTER ARENA
+            </button>
+
+            {/* Warning */}
+            <p className="text-center text-[10px] font-mono tracking-wider text-gray-600 leading-relaxed">
+              WARNING: HIGH VOLATILITY COMBAT ZONE. ENSURE SUFFICIENT GAS FOR HOOK EXECUTION.
+            </p>
           </div>
         </div>
 
-        {/* Summary */}
-        <div className="card mb-6 bg-background-tertiary">
-          <h2 className="text-lg font-semibold mb-4">Summary</h2>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-400">Battle Type</span>
-              <span className="font-medium capitalize">{battleType} Battle</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Position</span>
-              <span className="font-medium">#{selectedPosition || '-'}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Duration</span>
-              <span className="font-medium">
-                {DURATION_OPTIONS.find((o) => o.value === duration)?.label}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Opponent Match Range</span>
-              <span className="font-medium">±10% value</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-4">
-          <button
-            disabled={!selectedPosition}
-            className="btn-secondary flex-1"
-          >
-            Approve Position
-          </button>
-          <button
-            disabled={!selectedPosition}
-            className="btn-primary flex-1"
-          >
-            Create Battle
-          </button>
+        {/* Terminal Status Footer */}
+        <div className="mt-16 text-center">
+          <p className="text-xs font-mono text-gray-600 tracking-wider">
+            TERMINAL STATUS: <span style={{ color: '#22c55e' }}>ONLINE</span> // BLOCK: 18492031 // BATTLE_INIT_V4
+          </p>
         </div>
       </div>
     </div>
