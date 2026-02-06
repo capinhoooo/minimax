@@ -164,7 +164,6 @@ export default function Home() {
                 {/* Pool header */}
                 <div className="flex items-center justify-between mb-6">
                   <span className="text-white font-medium">ETH/USDC Pool</span>
-                  <span className="text-accent-green font-mono text-sm">+12.4% APY</span>
                 </div>
 
                 {/* Chart */}
