@@ -1,393 +1,293 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
-import { ArrowDown, Settings, ChevronDown } from 'lucide-react';
+import { LiFiWidget } from '@lifi/widget';
+import type { WidgetConfig } from '@lifi/widget';
+import CctpBridge from '../components/CctpBridge';
 
-const tokens = [
-  { symbol: 'ETH', name: 'Ethereum', icon: '/eth.svg', color: '#627EEA' },
-  { symbol: 'USDC', name: 'USD Coin', icon: '/usdc.svg', color: '#2775CA' },
-  { symbol: 'USDT', name: 'Tether', icon: '/usdt.svg', color: '#26A17B' },
-  { symbol: 'DAI', name: 'Dai', icon: '/dai.svg', color: '#F5AC37' },
-  { symbol: 'WETH', name: 'Wrapped ETH', icon: '/weth.svg', color: '#EC4899' },
+type TabType = 'swap' | 'bridge' | 'cctp';
+
+// Chain IDs for LI.FI config (mainnet — LI.FI only supports mainnet)
+// Solana uses LI.FI's internal chain ID
+const SOLANA_CHAIN_ID = 1151111081099710;
+
+// All CCTP V2 chains that LI.FI supports (EVM + Solana)
+// USDC on these chains auto-routes through Circle CCTP
+const LIFI_CCTP_CHAINS = [
+  1,                  // Ethereum
+  10,                 // Optimism
+  137,                // Polygon PoS
+  42161,              // Arbitrum
+  8453,               // Base
+  43114,              // Avalanche
+  56,                 // BNB Smart Chain
+  59144,              // Linea
+  146,                // Sonic
+  SOLANA_CHAIN_ID,    // Solana
 ];
 
-const chains = [
-  { id: 'ARB', name: 'Arbitrum', icon: '🔵' },
-  { id: 'BASE', name: 'Base', icon: '🔵' },
-  { id: 'ETH', name: 'Ethereum', icon: '⚪' },
-  { id: 'OP', name: 'Optimism', icon: '🔴' },
-  { id: 'POLY', name: 'Polygon', icon: '🟣' },
+// Broader set for bridge: CCTP chains + other popular L2s
+const BRIDGE_CHAINS = [
+  ...LIFI_CCTP_CHAINS,
+  324,                // zkSync Era
+  534352,             // Scroll
+  81457,              // Blast
+  252,                // Fraxtal
+  34443,              // Mode
+  7777777,            // Zora
 ];
 
-type TabType = 'swap' | 'bridge';
+// Shared theme for the arena aesthetic
+const baseTheme = {
+  palette: {
+    primary: { main: '#ed7f2f' },
+    secondary: { main: '#42c7e6' },
+    background: {
+      default: '#050505',
+      paper: '#0a0a0a',
+    },
+    text: {
+      primary: '#ffffff',
+      secondary: '#9ca3af',
+    },
+    grey: {
+      200: '#1a1a1a',
+      300: '#252525',
+      700: '#6b7280',
+      800: '#9ca3af',
+    },
+  },
+  shape: {
+    borderRadius: 12,
+    borderRadiusSecondary: 12,
+    borderRadiusTertiary: 24,
+  },
+  typography: {
+    fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+  },
+  container: {
+    border: '1px solid rgba(237, 127, 47, 0.3)',
+    borderRadius: '16px',
+    boxShadow: '0 0 30px rgba(237, 127, 47, 0.1)',
+    maxHeight: 700,
+  },
+};
+
+const swapConfig: WidgetConfig = {
+  integrator: 'lp-battlevault',
+  appearance: 'dark',
+  variant: 'compact',
+  subvariant: 'split',
+  subvariantOptions: { split: 'swap' },
+  theme: baseTheme,
+  hiddenUI: ['appearance', 'language', 'poweredBy'],
+  slippage: 0.005,
+  routePriority: 'CHEAPEST',
+};
+
+const bridgeConfig: WidgetConfig = {
+  integrator: 'lp-battlevault',
+  appearance: 'dark',
+  variant: 'compact',
+  subvariant: 'split',
+  subvariantOptions: { split: 'bridge' },
+  theme: {
+    ...baseTheme,
+    palette: {
+      ...baseTheme.palette,
+      primary: { main: '#42c7e6' },
+    },
+    container: {
+      ...baseTheme.container,
+      border: '1px solid rgba(66, 199, 230, 0.3)',
+      boxShadow: '0 0 30px rgba(66, 199, 230, 0.1)',
+    },
+  },
+  chains: {
+    allow: BRIDGE_CHAINS,
+  },
+  hiddenUI: ['appearance', 'language', 'poweredBy'],
+  slippage: 0.005,
+  routePriority: 'CHEAPEST',
+};
+
+const HEADERS: Record<TabType, { title: string; subtitle: string }> = {
+  swap: {
+    title: 'ARENA SWAP',
+    subtitle: 'SWAP ANY TOKEN ON ANY CHAIN TO PREPARE FOR BATTLE',
+  },
+  bridge: {
+    title: 'ARENA BRIDGE',
+    subtitle: 'BRIDGE ACROSS 20+ CHAINS // USDC VIA CIRCLE CCTP',
+  },
+  cctp: {
+    title: 'TESTNET CCTP',
+    subtitle: 'BRIDGE USDC ACROSS TESTNETS VIA CIRCLE CCTP V2',
+  },
+};
+
+const INFO: Record<TabType, { label: string; desc: string }> = {
+  swap: {
+    label: 'POWERED BY LI.FI',
+    desc: 'LI.FI aggregates 15+ DEXs to find you the best swap route on any chain.',
+  },
+  bridge: {
+    label: 'POWERED BY LI.FI + CIRCLE CCTP',
+    desc: 'USDC auto-routes through Circle CCTP across 20+ chains including Solana — native tokens, zero slippage. Other tokens bridge via the best available route.',
+  },
+  cctp: {
+    label: 'POWERED BY CIRCLE CCTP V2',
+    desc: 'Bridge USDC directly between 7 testnet chains (Sepolia, Base Sepolia, Arbitrum Sepolia, OP Sepolia, Polygon Amoy, Avalanche Fuji, Linea Sepolia). Native burn-and-mint, zero slippage.',
+  },
+};
+
+const FOOTER: Record<TabType, string> = {
+  swap: 'SWAP_ENGINE_V4',
+  bridge: 'BRIDGE_CCTP_V4',
+  cctp: 'CCTP_TESTNET_V2',
+};
+
+const TAB_COLORS: Record<TabType, { active: string; activeBorder: string; gradient: string }> = {
+  swap: {
+    active: '#ed7f2f',
+    activeBorder: 'rgba(237, 127, 47, 0.5)',
+    gradient: 'linear-gradient(135deg, rgba(237, 127, 47, 0.2), rgba(138, 56, 21, 0.2))',
+  },
+  bridge: {
+    active: '#42c7e6',
+    activeBorder: 'rgba(66, 199, 230, 0.5)',
+    gradient: 'linear-gradient(135deg, rgba(66, 199, 230, 0.2), rgba(33, 100, 115, 0.2))',
+  },
+  cctp: {
+    active: '#a78bfa',
+    activeBorder: 'rgba(139, 92, 246, 0.5)',
+    gradient: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(88, 28, 135, 0.2))',
+  },
+};
+
+const INFO_COLORS: Record<TabType, { bg: string; border: string; text: string }> = {
+  swap: {
+    bg: 'rgba(237, 127, 47, 0.08)',
+    border: '1px solid rgba(237, 127, 47, 0.2)',
+    text: '#ed7f2f',
+  },
+  bridge: {
+    bg: 'rgba(66, 199, 230, 0.08)',
+    border: '1px solid rgba(66, 199, 230, 0.2)',
+    text: '#42c7e6',
+  },
+  cctp: {
+    bg: 'rgba(139, 92, 246, 0.08)',
+    border: '1px solid rgba(139, 92, 246, 0.2)',
+    text: '#a78bfa',
+  },
+};
 
 export default function Swap() {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const isBridgeRoute = location.pathname === '/bridge';
-  const initialTab = isBridgeRoute || searchParams.get('tab') === 'bridge' ? 'bridge' : 'swap';
+  const initialTab: TabType = isBridgeRoute || searchParams.get('tab') === 'bridge'
+    ? 'bridge'
+    : searchParams.get('tab') === 'cctp'
+    ? 'cctp'
+    : 'swap';
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
 
-  // Update active tab when URL changes
   useEffect(() => {
     if (location.pathname === '/bridge') {
       setActiveTab('bridge');
     } else if (searchParams.get('tab') === 'bridge') {
       setActiveTab('bridge');
-    } else {
+    } else if (searchParams.get('tab') === 'cctp') {
+      setActiveTab('cctp');
+    } else if (location.pathname === '/swap') {
       setActiveTab('swap');
     }
   }, [searchParams, location.pathname]);
 
-  const [sellToken, setSellToken] = useState('ETH');
-  const [buyToken, setBuyToken] = useState('USDC');
-  const [sellAmount, setSellAmount] = useState('0.5');
-  const [fromChain] = useState('ARB');
-  const [toChain] = useState('BASE');
-  const [bridgeAmount, setBridgeAmount] = useState('');
-
-  const handleSwapTokens = () => {
-    const temp = sellToken;
-    setSellToken(buyToken);
-    setBuyToken(temp);
-  };
-
-  const sellTokenData = tokens.find(t => t.symbol === sellToken);
-  const buyTokenData = tokens.find(t => t.symbol === buyToken);
-
-  // Mock calculations
-  const ethPrice = 2488.24;
-  const buyAmount = sellAmount ? (parseFloat(sellAmount) * ethPrice).toFixed(2) : '0.00';
-  const usdValue = sellAmount ? (parseFloat(sellAmount) * ethPrice).toFixed(2) : '0.00';
-  const priceImpact = '-0.08%';
-  const networkCost = '~$4.20';
+  const header = HEADERS[activeTab];
+  const info = INFO[activeTab];
+  const infoColor = INFO_COLORS[activeTab];
 
   return (
     <div className="min-h-screen grid-bg py-12 px-4">
-      <div className="mx-auto max-w-md">
-        {/* Main Card */}
+      <div className="mx-auto max-w-lg">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tight mb-2">
+            <span className="gradient-text-magenta italic">
+              {header.title}
+            </span>
+          </h1>
+          <p className="text-xs font-mono text-gray-500 tracking-[0.2em]">
+            {header.subtitle}
+          </p>
+        </div>
+
+        {/* Tabs */}
         <div
-          className="rounded-2xl overflow-hidden"
+          className="flex p-1.5 gap-1.5 rounded-xl mb-6"
           style={{
-            background: 'linear-gradient(135deg, rgba(10, 10, 10, 0.98), rgba(1, 1, 1, 0.99))',
-            border: '1px solid rgba(237, 127, 47, 0.4)',
-            boxShadow: '0 0 40px rgba(237, 127, 47, 0.15), 0 0 80px rgba(237, 127, 47, 0.1)'
+            background: 'rgba(10, 10, 10, 0.8)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
           }}
         >
-          {/* Tabs */}
-          <div className="flex p-2 gap-2 bg-black/30">
-            <button
-              onClick={() => setActiveTab('swap')}
-              className={`flex-1 py-3 px-6 rounded-lg font-medium text-sm tracking-wider transition-all ${
-                activeTab === 'swap'
-                  ? 'text-white'
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-              style={{
-                background: activeTab === 'swap'
-                  ? 'linear-gradient(135deg, rgba(237, 127, 47, 0.3), rgba(138, 56, 21, 0.3))'
-                  : 'transparent',
-                border: activeTab === 'swap' ? '1px solid rgba(237, 127, 47, 0.5)' : '1px solid transparent'
-              }}
-            >
-              SWAP
-            </button>
-            <button
-              onClick={() => setActiveTab('bridge')}
-              className={`flex-1 py-3 px-6 rounded-lg font-medium text-sm tracking-wider transition-all ${
-                activeTab === 'bridge'
-                  ? 'text-white'
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-              style={{
-                background: activeTab === 'bridge'
-                  ? 'linear-gradient(135deg, rgba(237, 127, 47, 0.3), rgba(138, 56, 21, 0.3))'
-                  : 'transparent',
-                border: activeTab === 'bridge' ? '1px solid rgba(237, 127, 47, 0.5)' : '1px solid transparent'
-              }}
-            >
-              BRIDGE
-            </button>
-          </div>
+          {(['swap', 'bridge', 'cctp'] as TabType[]).map((tab) => {
+            const isActive = activeTab === tab;
+            const colors = TAB_COLORS[tab];
+            return (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className="flex-1 py-3 px-4 rounded-lg font-bold text-xs tracking-widest font-mono transition-all"
+                style={{
+                  background: isActive ? colors.gradient : 'transparent',
+                  border: isActive ? `1px solid ${colors.activeBorder}` : '1px solid transparent',
+                  color: isActive ? colors.active : '#6b7280',
+                }}
+              >
+                {tab.toUpperCase()}
+              </button>
+            );
+          })}
+        </div>
 
-          {/* Content */}
-          <div className="p-6">
-            {activeTab === 'swap' ? (
-              <>
-                {/* Swap Header */}
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-semibold text-white tracking-wide">ARENA SWAP</h2>
-                  <button className="p-2 rounded-lg hover:bg-white/5 transition-colors">
-                    <Settings className="h-5 w-5 text-gray-400" />
-                  </button>
-                </div>
-
-                {/* Sell Section */}
-                <div
-                  className="rounded-xl p-4 mb-2"
-                  style={{
-                    background: 'rgba(20, 20, 20, 0.6)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)'
-                  }}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm text-gray-400">Sell</span>
-                    <span className="text-sm text-gray-400">Balance: 1.42 ETH</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <input
-                      type="text"
-                      value={sellAmount}
-                      onChange={(e) => setSellAmount(e.target.value)}
-                      className="bg-transparent text-4xl font-light text-white outline-none w-1/2"
-                      placeholder="0"
-                    />
-                    <button
-                      className="flex items-center gap-2 px-4 py-2 rounded-full transition-colors"
-                      style={{
-                        background: 'rgba(237, 127, 47, 0.2)',
-                        border: '1px solid rgba(237, 127, 47, 0.5)'
-                      }}
-                    >
-                      <div
-                        className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
-                        style={{ backgroundColor: sellTokenData?.color }}
-                      >
-                        {sellToken.charAt(0)}
-                      </div>
-                      <span className="text-white font-medium">{sellToken}</span>
-                      <ChevronDown className="h-4 w-4 text-gray-400" />
-                    </button>
-                  </div>
-                  <div className="mt-2 text-sm text-gray-500">${usdValue}</div>
-                </div>
-
-                {/* Swap Button */}
-                <div className="relative flex justify-center -my-3 z-10">
-                  <button
-                    onClick={handleSwapTokens}
-                    className="p-3 rounded-xl transition-colors"
-                    style={{
-                      background: 'rgba(20, 20, 20, 0.9)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)'
-                    }}
-                  >
-                    <ArrowDown className="h-4 w-4" style={{ color: '#42c7e6' }} />
-                  </button>
-                </div>
-
-                {/* Buy Section */}
-                <div
-                  className="rounded-xl p-4 mt-2"
-                  style={{
-                    background: 'rgba(20, 20, 20, 0.6)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)'
-                  }}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm text-gray-400">Buy</span>
-                    <span className="text-sm text-gray-400">Balance: 0.00 USDC</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="text-4xl font-light text-white">
-                      {buyAmount ? Number(buyAmount).toLocaleString() : '0'}
-                    </div>
-                    <button
-                      className="flex items-center gap-2 px-4 py-2 rounded-full transition-colors"
-                      style={{
-                        background: 'rgba(66, 199, 230, 0.2)',
-                        border: '1px solid rgba(66, 199, 230, 0.5)'
-                      }}
-                    >
-                      <div
-                        className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
-                        style={{ backgroundColor: buyTokenData?.color }}
-                      >
-                        $
-                      </div>
-                      <span className="text-white font-medium">{buyToken}</span>
-                      <ChevronDown className="h-4 w-4 text-gray-400" />
-                    </button>
-                  </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="text-sm text-gray-500">${buyAmount}</span>
-                    <span className="text-sm" style={{ color: '#ed7f2f' }}>({priceImpact})</span>
-                  </div>
-                </div>
-
-                {/* Price Info */}
-                <div
-                  className="rounded-xl p-4 mt-4"
-                  style={{
-                    background: 'rgba(20, 20, 20, 0.4)',
-                    border: '1px dashed rgba(255, 255, 255, 0.1)'
-                  }}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-500">Price</span>
-                    <span className="text-sm text-white">1 ETH = 2,488.24 USDC</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">Network Cost</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm" style={{ color: '#42c7e6' }}>{networkCost}</span>
-                      <span
-                        className="text-xs px-2 py-0.5 rounded"
-                        style={{ background: 'rgba(255, 255, 255, 0.1)' }}
-                      >
-                        ARB
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Action Button */}
-                <button
-                  className="w-full mt-6 py-4 rounded-xl font-semibold text-lg tracking-wide transition-all hover:opacity-90"
-                  style={{
-                    background: 'linear-gradient(135deg, #ed7f2f, #d946ef)',
-                    color: 'white'
-                  }}
-                >
-                  ENTER THE ARENA
-                </button>
-              </>
-            ) : (
-              <>
-                {/* Bridge Header */}
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-semibold text-white tracking-wide">ARENA BRIDGE</h2>
-                  <button className="p-2 rounded-lg hover:bg-white/5 transition-colors">
-                    <Settings className="h-5 w-5 text-gray-400" />
-                  </button>
-                </div>
-
-                {/* From Chain */}
-                <div
-                  className="rounded-xl p-4 mb-2"
-                  style={{
-                    background: 'rgba(20, 20, 20, 0.6)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)'
-                  }}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm text-gray-400">From</span>
-                    <span className="text-sm text-gray-400">Balance: 2,450.00 USDC</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <input
-                      type="text"
-                      value={bridgeAmount}
-                      onChange={(e) => setBridgeAmount(e.target.value)}
-                      className="bg-transparent text-4xl font-light text-white outline-none w-1/2"
-                      placeholder="0"
-                    />
-                    <button
-                      className="flex items-center gap-2 px-4 py-2 rounded-full transition-colors"
-                      style={{
-                        background: 'rgba(237, 127, 47, 0.2)',
-                        border: '1px solid rgba(237, 127, 47, 0.5)'
-                      }}
-                    >
-                      <span className="text-lg">{chains.find(c => c.id === fromChain)?.icon}</span>
-                      <span className="text-white font-medium">{chains.find(c => c.id === fromChain)?.name}</span>
-                      <ChevronDown className="h-4 w-4 text-gray-400" />
-                    </button>
-                  </div>
-                  <div className="mt-2 text-sm text-gray-500">USDC</div>
-                </div>
-
-                {/* Arrow */}
-                <div className="relative flex justify-center -my-3 z-10">
-                  <div
-                    className="p-3 rounded-xl"
-                    style={{
-                      background: 'rgba(20, 20, 20, 0.9)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)'
-                    }}
-                  >
-                    <ArrowDown className="h-4 w-4" style={{ color: '#42c7e6' }} />
-                  </div>
-                </div>
-
-                {/* To Chain */}
-                <div
-                  className="rounded-xl p-4 mt-2"
-                  style={{
-                    background: 'rgba(20, 20, 20, 0.6)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)'
-                  }}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm text-gray-400">To</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="text-4xl font-light text-white">
-                      {bridgeAmount || '0'}
-                    </div>
-                    <button
-                      className="flex items-center gap-2 px-4 py-2 rounded-full transition-colors"
-                      style={{
-                        background: 'rgba(66, 199, 230, 0.2)',
-                        border: '1px solid rgba(66, 199, 230, 0.5)'
-                      }}
-                    >
-                      <span className="text-lg">{chains.find(c => c.id === toChain)?.icon}</span>
-                      <span className="text-white font-medium">{chains.find(c => c.id === toChain)?.name}</span>
-                      <ChevronDown className="h-4 w-4 text-gray-400" />
-                    </button>
-                  </div>
-                  <div className="mt-2 text-sm" style={{ color: '#22c55e' }}>Native USDC</div>
-                </div>
-
-                {/* Bridge Info */}
-                <div
-                  className="rounded-xl p-4 mt-4"
-                  style={{
-                    background: 'rgba(20, 20, 20, 0.4)',
-                    border: '1px dashed rgba(255, 255, 255, 0.1)'
-                  }}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-500">Estimated Time</span>
-                    <span className="text-sm text-white">~15-20 minutes</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">Bridge Fee</span>
-                    <span className="text-sm" style={{ color: '#42c7e6' }}>$0 (gas only)</span>
-                  </div>
-                </div>
-
-                {/* Action Button */}
-                <button
-                  disabled={!bridgeAmount}
-                  className="w-full mt-6 py-4 rounded-xl font-semibold text-lg tracking-wide transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{
-                    background: 'linear-gradient(135deg, #ed7f2f, #d946ef)',
-                    color: 'white'
-                  }}
-                >
-                  {bridgeAmount ? 'BRIDGE USDC' : 'ENTER AMOUNT'}
-                </button>
-              </>
-            )}
-          </div>
+        {/* Content */}
+        <div className="lifi-widget-container">
+          {activeTab === 'swap' && (
+            <LiFiWidget integrator="lp-battlevault" config={swapConfig} />
+          )}
+          {activeTab === 'bridge' && (
+            <LiFiWidget integrator="lp-battlevault" config={bridgeConfig} />
+          )}
+          {activeTab === 'cctp' && (
+            <CctpBridge />
+          )}
         </div>
 
         {/* Info Box */}
         <div
           className="mt-6 p-4 rounded-xl"
           style={{
-            background: 'rgba(66, 199, 230, 0.1)',
-            border: '1px solid rgba(66, 199, 230, 0.2)'
+            background: infoColor.bg,
+            border: infoColor.border,
           }}
         >
-          <p className="text-sm" style={{ color: '#42c7e6' }}>
-            {activeTab === 'swap' ? 'Powered by LI.FI' : 'Powered by Circle CCTP'}
+          <p
+            className="text-xs font-mono font-bold tracking-wider"
+            style={{ color: infoColor.text }}
+          >
+            {info.label}
           </p>
-          <p className="text-sm text-gray-400 mt-1">
-            {activeTab === 'swap'
-              ? 'LI.FI finds the best route across 15+ DEXs and bridges to get you the best price.'
-              : 'CCTP burns USDC on the source chain and mints native USDC on the destination.'}
+          <p className="text-xs text-gray-500 mt-1.5 font-mono tracking-wider leading-relaxed">
+            {info.desc}
+          </p>
+        </div>
+
+        {/* Terminal Footer */}
+        <div className="mt-8 text-center">
+          <p className="text-[10px] font-mono text-gray-700 tracking-widest">
+            TERMINAL STATUS: <span style={{ color: '#22c55e' }}>ONLINE</span> // {FOOTER[activeTab]}
           </p>
         </div>
       </div>
