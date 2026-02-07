@@ -31,31 +31,13 @@ interface AggregatorV3Interface {
 
 // ============ Position Manager Interface (V4) ============
 
-interface IPositionManager {
-    struct PositionInfo {
-        PoolKey poolKey;
-        int24 tickLower;
-        int24 tickUpper;
-        uint128 liquidity;
-    }
+import {PositionInfo} from "v4-periphery/src/libraries/PositionInfoLibrary.sol";
 
-    function getPositionInfo(uint256 tokenId) external view returns (PositionInfo memory);
+interface IPositionManager {
+    function getPoolAndPositionInfo(uint256 tokenId) external view returns (PoolKey memory poolKey, PositionInfo info);
+    function getPositionLiquidity(uint256 tokenId) external view returns (uint128 liquidity);
     function ownerOf(uint256 tokenId) external view returns (address);
     function safeTransferFrom(address from, address to, uint256 tokenId) external;
-    function positions(uint256 tokenId) external view returns (
-        uint96 nonce,
-        address operator,
-        Currency currency0,
-        Currency currency1,
-        uint24 fee,
-        int24 tickLower,
-        int24 tickUpper,
-        uint128 liquidity,
-        uint256 feeGrowthInside0LastX128,
-        uint256 feeGrowthInside1LastX128,
-        uint128 tokensOwed0,
-        uint128 tokensOwed1
-    );
 }
 
 // ============ Battle Vault Interface ============

@@ -12,10 +12,8 @@ import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/types/PoolId.sol";
 import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
 import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
-import {IHooks} from "v4-core/interfaces/IHooks.sol";
-import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
-
 import {IPositionManager, AggregatorV3Interface} from "./interfaces/IShared.sol";
+import {PositionInfo} from "v4-periphery/src/libraries/PositionInfoLibrary.sol";
 import {PoolUtilsV4} from "./libraries/PoolUtilsV4.sol";
 import {TransferUtils} from "./libraries/TransferUtils.sol";
 import {StringUtils} from "./libraries/StringUtils.sol";
@@ -83,12 +81,18 @@ contract LPFeeBattleV4 is IERC721Receiver, ReentrancyGuard, Pausable {
         uint256 opponentTokenId;
         PoolKey creatorPoolKey;
         PoolKey opponentPoolKey;
+        int24 creatorTickLower;
+        int24 creatorTickUpper;
+        int24 opponentTickLower;
+        int24 opponentTickUpper;
+        uint128 creatorLiquidity;
+        uint128 opponentLiquidity;
         uint256 startTime;
         uint256 duration;
-        uint256 creatorStartFee0;
-        uint256 creatorStartFee1;
-        uint256 opponentStartFee0;
-        uint256 opponentStartFee1;
+        uint256 creatorStartFeeGrowth0;
+        uint256 creatorStartFeeGrowth1;
+        uint256 opponentStartFeeGrowth0;
+        uint256 opponentStartFeeGrowth1;
         uint256 creatorLPValue;
         uint256 opponentLPValue;
         bool isResolved;
@@ -222,40 +226,17 @@ contract LPFeeBattleV4 is IERC721Receiver, ReentrancyGuard, Pausable {
         // Transfer NFT to vault
         positionManager.safeTransferFrom(msg.sender, address(this), tokenId);
 
-        // Get position data
-        (
-            ,
-            ,
-            Currency currency0,
-            Currency currency1,
-            uint24 fee,
-            int24 tickLower,
-            int24 tickUpper,
-            uint128 liquidity,
-            ,
-            ,
-            uint128 tokensOwed0,
-            uint128 tokensOwed1
-        ) = positionManager.positions(tokenId);
+        // Get position data from V4 PositionManager
+        (PoolKey memory poolKey, PositionInfo info) = positionManager.getPoolAndPositionInfo(tokenId);
+        int24 tickLower = info.tickLower();
+        int24 tickUpper = info.tickUpper();
+        uint128 liquidity = positionManager.getPositionLiquidity(tokenId);
+
+        // Get current fee growth for this position
+        (uint256 feeGrowth0, uint256 feeGrowth1) = _getPositionFeeGrowth(tokenId, poolKey, tickLower, tickUpper);
 
         // Calculate USD value
-        uint256 lpValue = _calculatePositionUSDValue(
-            currency0,
-            currency1,
-            fee,
-            tickLower,
-            tickUpper,
-            liquidity
-        );
-
-        // Create pool key
-        PoolKey memory poolKey = PoolKey({
-            currency0: currency0,
-            currency1: currency1,
-            fee: fee,
-            tickSpacing: _getTickSpacing(fee),
-            hooks: IHooks(address(0))
-        });
+        uint256 lpValue = _calculatePositionUSDValue(poolKey, tickLower, tickUpper, liquidity);
 
         // Create battle
         battleId = battleIdCounter++;
@@ -263,9 +244,12 @@ contract LPFeeBattleV4 is IERC721Receiver, ReentrancyGuard, Pausable {
         battle.creator = msg.sender;
         battle.creatorTokenId = tokenId;
         battle.creatorPoolKey = poolKey;
+        battle.creatorTickLower = tickLower;
+        battle.creatorTickUpper = tickUpper;
+        battle.creatorLiquidity = liquidity;
         battle.duration = duration;
-        battle.creatorStartFee0 = tokensOwed0;
-        battle.creatorStartFee1 = tokensOwed1;
+        battle.creatorStartFeeGrowth0 = feeGrowth0;
+        battle.creatorStartFeeGrowth1 = feeGrowth1;
         battle.creatorLPValue = lpValue;
 
         emit BattleCreated(battleId, msg.sender, tokenId, duration, lpValue);
@@ -286,31 +270,14 @@ contract LPFeeBattleV4 is IERC721Receiver, ReentrancyGuard, Pausable {
         if (battle.opponent != address(0)) revert BattleAlreadyJoined();
         if (positionManager.ownerOf(tokenId) != msg.sender) revert NotLPOwner();
 
-        // Get position data
-        (
-            ,
-            ,
-            Currency currency0,
-            Currency currency1,
-            uint24 fee,
-            int24 tickLower,
-            int24 tickUpper,
-            uint128 liquidity,
-            ,
-            ,
-            uint128 tokensOwed0,
-            uint128 tokensOwed1
-        ) = positionManager.positions(tokenId);
+        // Get position data from V4 PositionManager
+        (PoolKey memory poolKey, PositionInfo info) = positionManager.getPoolAndPositionInfo(tokenId);
+        int24 tickLower = info.tickLower();
+        int24 tickUpper = info.tickUpper();
+        uint128 liquidity = positionManager.getPositionLiquidity(tokenId);
 
         // Calculate USD value
-        uint256 opponentLPValue = _calculatePositionUSDValue(
-            currency0,
-            currency1,
-            fee,
-            tickLower,
-            tickUpper,
-            liquidity
-        );
+        uint256 opponentLPValue = _calculatePositionUSDValue(poolKey, tickLower, tickUpper, liquidity);
 
         // Check value tolerance (within 5%)
         uint256 minValue = (battle.creatorLPValue * 95) / 100;
@@ -322,21 +289,18 @@ contract LPFeeBattleV4 is IERC721Receiver, ReentrancyGuard, Pausable {
         // Transfer NFT to vault
         positionManager.safeTransferFrom(msg.sender, address(this), tokenId);
 
-        // Create pool key
-        PoolKey memory poolKey = PoolKey({
-            currency0: currency0,
-            currency1: currency1,
-            fee: fee,
-            tickSpacing: _getTickSpacing(fee),
-            hooks: IHooks(address(0))
-        });
+        // Get current fee growth for this position
+        (uint256 feeGrowth0, uint256 feeGrowth1) = _getPositionFeeGrowth(tokenId, poolKey, tickLower, tickUpper);
 
         // Update battle state
         battle.opponent = msg.sender;
         battle.opponentTokenId = tokenId;
         battle.opponentPoolKey = poolKey;
-        battle.opponentStartFee0 = tokensOwed0;
-        battle.opponentStartFee1 = tokensOwed1;
+        battle.opponentTickLower = tickLower;
+        battle.opponentTickUpper = tickUpper;
+        battle.opponentLiquidity = liquidity;
+        battle.opponentStartFeeGrowth0 = feeGrowth0;
+        battle.opponentStartFeeGrowth1 = feeGrowth1;
         battle.opponentLPValue = opponentLPValue;
         battle.startTime = block.timestamp;
         battleEndTime[battleId] = block.timestamp + battle.duration;
@@ -354,61 +318,44 @@ contract LPFeeBattleV4 is IERC721Receiver, ReentrancyGuard, Pausable {
         if (battle.opponent == address(0)) revert NoOpponentJoined();
         if (block.timestamp < battleEndTime[battleId]) revert BattleNotEnded();
 
-        // Get current fees for creator
-        (
-            ,
-            ,
-            Currency creatorCurrency0,
-            Currency creatorCurrency1,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            uint128 creatorCurrentFee0,
-            uint128 creatorCurrentFee1
-        ) = positionManager.positions(battle.creatorTokenId);
+        // Get current fee growth for creator
+        (uint256 creatorCurrentFG0, uint256 creatorCurrentFG1) = _getPositionFeeGrowth(
+            battle.creatorTokenId, battle.creatorPoolKey, battle.creatorTickLower, battle.creatorTickUpper
+        );
 
-        // Get current fees for opponent
-        (
-            ,
-            ,
-            Currency opponentCurrency0,
-            Currency opponentCurrency1,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            uint128 opponentCurrentFee0,
-            uint128 opponentCurrentFee1
-        ) = positionManager.positions(battle.opponentTokenId);
+        // Get current fee growth for opponent
+        (uint256 opponentCurrentFG0, uint256 opponentCurrentFG1) = _getPositionFeeGrowth(
+            battle.opponentTokenId, battle.opponentPoolKey, battle.opponentTickLower, battle.opponentTickUpper
+        );
 
-        // Calculate fee growth in USD
-        uint256 creatorFeeGrowth0 = creatorCurrentFee0 > battle.creatorStartFee0
-            ? creatorCurrentFee0 - uint128(battle.creatorStartFee0) : 0;
-        uint256 creatorFeeGrowth1 = creatorCurrentFee1 > battle.creatorStartFee1
-            ? creatorCurrentFee1 - uint128(battle.creatorStartFee1) : 0;
+        // Calculate fee growth delta (feeGrowthInside is X128 fixed point)
+        uint256 creatorFGDelta0 = creatorCurrentFG0 >= battle.creatorStartFeeGrowth0
+            ? creatorCurrentFG0 - battle.creatorStartFeeGrowth0 : 0;
+        uint256 creatorFGDelta1 = creatorCurrentFG1 >= battle.creatorStartFeeGrowth1
+            ? creatorCurrentFG1 - battle.creatorStartFeeGrowth1 : 0;
 
-        uint256 opponentFeeGrowth0 = opponentCurrentFee0 > battle.opponentStartFee0
-            ? opponentCurrentFee0 - uint128(battle.opponentStartFee0) : 0;
-        uint256 opponentFeeGrowth1 = opponentCurrentFee1 > battle.opponentStartFee1
-            ? opponentCurrentFee1 - uint128(battle.opponentStartFee1) : 0;
+        uint256 opponentFGDelta0 = opponentCurrentFG0 >= battle.opponentStartFeeGrowth0
+            ? opponentCurrentFG0 - battle.opponentStartFeeGrowth0 : 0;
+        uint256 opponentFGDelta1 = opponentCurrentFG1 >= battle.opponentStartFeeGrowth1
+            ? opponentCurrentFG1 - battle.opponentStartFeeGrowth1 : 0;
 
+        // Convert feeGrowthInside deltas to actual token amounts: amount = delta * liquidity / 2^128
+        uint256 creatorFeeAmt0 = (creatorFGDelta0 * uint256(battle.creatorLiquidity)) >> 128;
+        uint256 creatorFeeAmt1 = (creatorFGDelta1 * uint256(battle.creatorLiquidity)) >> 128;
+        uint256 opponentFeeAmt0 = (opponentFGDelta0 * uint256(battle.opponentLiquidity)) >> 128;
+        uint256 opponentFeeAmt1 = (opponentFGDelta1 * uint256(battle.opponentLiquidity)) >> 128;
+
+        // Convert to USD
         uint256 creatorFeeGrowthUSD = _convertFeesToUSD(
-            creatorFeeGrowth0,
-            creatorFeeGrowth1,
-            Currency.unwrap(creatorCurrency0),
-            Currency.unwrap(creatorCurrency1)
+            creatorFeeAmt0, creatorFeeAmt1,
+            Currency.unwrap(battle.creatorPoolKey.currency0),
+            Currency.unwrap(battle.creatorPoolKey.currency1)
         );
 
         uint256 opponentFeeGrowthUSD = _convertFeesToUSD(
-            opponentFeeGrowth0,
-            opponentFeeGrowth1,
-            Currency.unwrap(opponentCurrency0),
-            Currency.unwrap(opponentCurrency1)
+            opponentFeeAmt0, opponentFeeAmt1,
+            Currency.unwrap(battle.opponentPoolKey.currency0),
+            Currency.unwrap(battle.opponentPoolKey.currency1)
         );
 
         // Calculate fee rates (fee growth / LP value) for fair comparison
@@ -434,22 +381,11 @@ contract LPFeeBattleV4 is IERC721Receiver, ReentrancyGuard, Pausable {
     // ============ Internal Functions ============
 
     function _calculatePositionUSDValue(
-        Currency currency0,
-        Currency currency1,
-        uint24 fee,
+        PoolKey memory poolKey,
         int24 tickLower,
         int24 tickUpper,
         uint128 liquidity
     ) internal view returns (uint256) {
-        // Get current sqrt price
-        PoolKey memory poolKey = PoolKey({
-            currency0: currency0,
-            currency1: currency1,
-            fee: fee,
-            tickSpacing: _getTickSpacing(fee),
-            hooks: IHooks(address(0))
-        });
-
         PoolId poolId = poolKey.toId();
         (uint160 sqrtPriceX96, , , ) = poolManager.getSlot0(poolId);
 
@@ -462,8 +398,8 @@ contract LPFeeBattleV4 is IERC721Receiver, ReentrancyGuard, Pausable {
         );
 
         // Get USD values
-        address token0 = Currency.unwrap(currency0);
-        address token1 = Currency.unwrap(currency1);
+        address token0 = Currency.unwrap(poolKey.currency0);
+        address token1 = Currency.unwrap(poolKey.currency1);
 
         uint256 value0 = _getTokenUSDValue(token0, amount0);
         uint256 value1 = _getTokenUSDValue(token1, amount1);
@@ -542,11 +478,20 @@ contract LPFeeBattleV4 is IERC721Receiver, ReentrancyGuard, Pausable {
         }
     }
 
-    function _getTickSpacing(uint24 fee) internal pure returns (int24) {
-        if (fee == 500) return 10;
-        if (fee == 3000) return 60;
-        if (fee == 10000) return 200;
-        return 60;
+    /// @notice Get feeGrowthInside for a V4 position via StateLibrary
+    function _getPositionFeeGrowth(
+        uint256 tokenId,
+        PoolKey memory poolKey,
+        int24 tickLower,
+        int24 tickUpper
+    ) internal view returns (uint256 feeGrowthInside0, uint256 feeGrowthInside1) {
+        // V4 position ID is keccak256(owner, tickLower, tickUpper, salt)
+        // where owner = positionManager and salt = bytes32(tokenId)
+        bytes32 positionId = keccak256(
+            abi.encodePacked(address(positionManager), tickLower, tickUpper, bytes32(tokenId))
+        );
+        PoolId poolId = poolKey.toId();
+        (, feeGrowthInside0, feeGrowthInside1) = poolManager.getPositionInfo(poolId, positionId);
     }
 
     // ============ View Functions ============
@@ -599,60 +544,43 @@ contract LPFeeBattleV4 is IERC721Receiver, ReentrancyGuard, Pausable {
         if (b.opponent == address(0)) revert BattleNotStarted();
         if (b.isResolved) return (0, 0, 0, 0, b.winner);
 
-        // Get current fees
-        (
-            ,
-            ,
-            Currency creatorCurrency0,
-            Currency creatorCurrency1,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            uint128 creatorCurrentFee0,
-            uint128 creatorCurrentFee1
-        ) = positionManager.positions(b.creatorTokenId);
+        // Get current fee growth for creator
+        (uint256 creatorCurrentFG0, uint256 creatorCurrentFG1) = _getPositionFeeGrowth(
+            b.creatorTokenId, b.creatorPoolKey, b.creatorTickLower, b.creatorTickUpper
+        );
 
-        (
-            ,
-            ,
-            Currency opponentCurrency0,
-            Currency opponentCurrency1,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            uint128 opponentCurrentFee0,
-            uint128 opponentCurrentFee1
-        ) = positionManager.positions(b.opponentTokenId);
+        // Get current fee growth for opponent
+        (uint256 opponentCurrentFG0, uint256 opponentCurrentFG1) = _getPositionFeeGrowth(
+            b.opponentTokenId, b.opponentPoolKey, b.opponentTickLower, b.opponentTickUpper
+        );
 
-        // Calculate fee growth
-        uint256 creatorFeeGrowth0 = creatorCurrentFee0 > b.creatorStartFee0
-            ? creatorCurrentFee0 - uint128(b.creatorStartFee0) : 0;
-        uint256 creatorFeeGrowth1 = creatorCurrentFee1 > b.creatorStartFee1
-            ? creatorCurrentFee1 - uint128(b.creatorStartFee1) : 0;
+        // Calculate fee growth deltas
+        uint256 creatorFGDelta0 = creatorCurrentFG0 >= b.creatorStartFeeGrowth0
+            ? creatorCurrentFG0 - b.creatorStartFeeGrowth0 : 0;
+        uint256 creatorFGDelta1 = creatorCurrentFG1 >= b.creatorStartFeeGrowth1
+            ? creatorCurrentFG1 - b.creatorStartFeeGrowth1 : 0;
 
-        uint256 opponentFeeGrowth0 = opponentCurrentFee0 > b.opponentStartFee0
-            ? opponentCurrentFee0 - uint128(b.opponentStartFee0) : 0;
-        uint256 opponentFeeGrowth1 = opponentCurrentFee1 > b.opponentStartFee1
-            ? opponentCurrentFee1 - uint128(b.opponentStartFee1) : 0;
+        uint256 opponentFGDelta0 = opponentCurrentFG0 >= b.opponentStartFeeGrowth0
+            ? opponentCurrentFG0 - b.opponentStartFeeGrowth0 : 0;
+        uint256 opponentFGDelta1 = opponentCurrentFG1 >= b.opponentStartFeeGrowth1
+            ? opponentCurrentFG1 - b.opponentStartFeeGrowth1 : 0;
+
+        // Convert to actual token amounts: amount = delta * liquidity / 2^128
+        uint256 creatorFeeAmt0 = (creatorFGDelta0 * uint256(b.creatorLiquidity)) >> 128;
+        uint256 creatorFeeAmt1 = (creatorFGDelta1 * uint256(b.creatorLiquidity)) >> 128;
+        uint256 opponentFeeAmt0 = (opponentFGDelta0 * uint256(b.opponentLiquidity)) >> 128;
+        uint256 opponentFeeAmt1 = (opponentFGDelta1 * uint256(b.opponentLiquidity)) >> 128;
 
         creatorFeeGrowthUSD = _convertFeesToUSD(
-            creatorFeeGrowth0,
-            creatorFeeGrowth1,
-            Currency.unwrap(creatorCurrency0),
-            Currency.unwrap(creatorCurrency1)
+            creatorFeeAmt0, creatorFeeAmt1,
+            Currency.unwrap(b.creatorPoolKey.currency0),
+            Currency.unwrap(b.creatorPoolKey.currency1)
         );
 
         opponentFeeGrowthUSD = _convertFeesToUSD(
-            opponentFeeGrowth0,
-            opponentFeeGrowth1,
-            Currency.unwrap(opponentCurrency0),
-            Currency.unwrap(opponentCurrency1)
+            opponentFeeAmt0, opponentFeeAmt1,
+            Currency.unwrap(b.opponentPoolKey.currency0),
+            Currency.unwrap(b.opponentPoolKey.currency1)
         );
 
         creatorFeeRate = b.creatorLPValue > 0

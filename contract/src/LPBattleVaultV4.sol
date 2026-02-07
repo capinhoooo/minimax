@@ -15,6 +15,7 @@ import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
 
 import {IPositionManager, AggregatorV3Interface} from "./interfaces/IShared.sol";
+import {PositionInfo} from "v4-periphery/src/libraries/PositionInfoLibrary.sol";
 import {PoolUtilsV4} from "./libraries/PoolUtilsV4.sol";
 import {TransferUtils} from "./libraries/TransferUtils.sol";
 import {StringUtils} from "./libraries/StringUtils.sol";
@@ -257,39 +258,19 @@ contract LPBattleVaultV4 is IERC721Receiver, Pausable, ReentrancyGuard {
         // Transfer NFT to vault
         positionManager.safeTransferFrom(msg.sender, address(this), tokenId);
 
-        // Get position data
-        (
-            ,
-            ,
-            Currency currency0,
-            Currency currency1,
-            uint24 fee,
-            int24 tickLower,
-            int24 tickUpper,
-            uint128 liquidity,
-            ,
-            ,
-            ,
-        ) = positionManager.positions(tokenId);
+        // Get position data from V4 PositionManager
+        (PoolKey memory poolKey, PositionInfo info) = positionManager.getPoolAndPositionInfo(tokenId);
+        int24 tickLower = info.tickLower();
+        int24 tickUpper = info.tickUpper();
+        uint128 liquidity = positionManager.getPositionLiquidity(tokenId);
 
         // Calculate USD value
         uint256 usdValue = _calculatePositionUSDValue(
-            currency0,
-            currency1,
-            fee,
+            poolKey,
             tickLower,
             tickUpper,
             liquidity
         );
-
-        // Create pool key
-        PoolKey memory poolKey = PoolKey({
-            currency0: currency0,
-            currency1: currency1,
-            fee: fee,
-            tickSpacing: _getTickSpacing(fee),
-            hooks: IHooks(address(battleHook))
-        });
 
         // Create battle
         battleId = battleIdCounter++;
@@ -327,26 +308,15 @@ contract LPBattleVaultV4 is IERC721Receiver, Pausable, ReentrancyGuard {
         if (battle.opponent != address(0)) revert BattleAlreadyJoined();
         if (positionManager.ownerOf(tokenId) != msg.sender) revert NotLPOwner();
 
-        // Get position data
-        (
-            ,
-            ,
-            Currency currency0,
-            Currency currency1,
-            uint24 fee,
-            int24 tickLower,
-            int24 tickUpper,
-            uint128 liquidity,
-            ,
-            ,
-            ,
-        ) = positionManager.positions(tokenId);
+        // Get position data from V4 PositionManager
+        (PoolKey memory poolKey, PositionInfo info) = positionManager.getPoolAndPositionInfo(tokenId);
+        int24 tickLower = info.tickLower();
+        int24 tickUpper = info.tickUpper();
+        uint128 liquidity = positionManager.getPositionLiquidity(tokenId);
 
         // Calculate USD value
         uint256 opponentValueUSD = _calculatePositionUSDValue(
-            currency0,
-            currency1,
-            fee,
+            poolKey,
             tickLower,
             tickUpper,
             liquidity
@@ -361,15 +331,6 @@ contract LPBattleVaultV4 is IERC721Receiver, Pausable, ReentrancyGuard {
 
         // Transfer NFT to vault
         positionManager.safeTransferFrom(msg.sender, address(this), tokenId);
-
-        // Create pool key
-        PoolKey memory poolKey = PoolKey({
-            currency0: currency0,
-            currency1: currency1,
-            fee: fee,
-            tickSpacing: _getTickSpacing(fee),
-            hooks: IHooks(address(battleHook))
-        });
 
         // Update battle state
         battle.opponent = msg.sender;
@@ -527,22 +488,12 @@ contract LPBattleVaultV4 is IERC721Receiver, Pausable, ReentrancyGuard {
     }
 
     function _calculatePositionUSDValue(
-        Currency currency0,
-        Currency currency1,
-        uint24 fee,
+        PoolKey memory poolKey,
         int24 tickLower,
         int24 tickUpper,
         uint128 liquidity
     ) internal view returns (uint256) {
         // Get current sqrt price
-        PoolKey memory poolKey = PoolKey({
-            currency0: currency0,
-            currency1: currency1,
-            fee: fee,
-            tickSpacing: _getTickSpacing(fee),
-            hooks: IHooks(address(battleHook))
-        });
-
         PoolId poolId = poolKey.toId();
         (uint160 sqrtPriceX96, , , ) = poolManager.getSlot0(poolId);
 
@@ -555,8 +506,8 @@ contract LPBattleVaultV4 is IERC721Receiver, Pausable, ReentrancyGuard {
         );
 
         // Get USD values
-        address token0 = Currency.unwrap(currency0);
-        address token1 = Currency.unwrap(currency1);
+        address token0 = Currency.unwrap(poolKey.currency0);
+        address token1 = Currency.unwrap(poolKey.currency1);
 
         uint256 value0 = _getTokenUSDValue(token0, amount0);
         uint256 value1 = _getTokenUSDValue(token1, amount1);
@@ -620,13 +571,6 @@ contract LPBattleVaultV4 is IERC721Receiver, Pausable, ReentrancyGuard {
         } catch {
             return 18;
         }
-    }
-
-    function _getTickSpacing(uint24 fee) internal pure returns (int24) {
-        if (fee == 500) return 10;
-        if (fee == 3000) return 60;
-        if (fee == 10000) return 200;
-        return 60; // Default
     }
 
     // ============ View Functions ============
