@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Wallet } from 'lucide-react';
 import logo from '../../assets/logo.png';
+import ConnectButton from '../wallet/ConnectButton';
 
 const navigation = [
   { name: 'LOBBY', href: '/lobby' },
@@ -63,17 +63,7 @@ export default function Header() {
           <div className="flex items-center gap-3 flex-shrink-0">
 
             {/* Connect Wallet Button */}
-            <button
-              className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-xs tracking-wider transition-all hover:opacity-90"
-              style={{
-                background: 'linear-gradient(135deg, rgba(66, 199, 230, 0.15), rgba(14, 77, 157, 0.15))',
-                border: '1px solid rgba(66, 199, 230, 0.3)',
-                color: '#42c7e6',
-              }}
-            >
-              <Wallet className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">CONNECT WALLET</span>
-            </button>
+            <ConnectButton />
           </div>
         </div>
       </div>
