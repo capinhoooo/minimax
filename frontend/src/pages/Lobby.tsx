@@ -456,7 +456,7 @@ export default function Lobby() {
                             {formatAddress(featured.creator, 3)}
                           </span>
                         </div>
-                        <p className="text-xs font-mono font-bold tracking-wider text-white">
+                        <p className="text-xs font-mono font-bold tracking-wider text-white pt-4">
                           CREATOR
                         </p>
                         <p className="text-[9px] font-mono text-gray-600 tracking-wider">
@@ -486,7 +486,7 @@ export default function Lobby() {
                             {featured.opponent !== ZERO_ADDRESS ? formatAddress(featured.opponent, 3) : '???'}
                           </span>
                         </div>
-                        <p className="text-xs font-mono font-bold tracking-wider text-white">
+                        <p className="text-xs font-mono font-bold tracking-wider text-white pt-4">
                           {featured.opponent !== ZERO_ADDRESS ? 'OPPONENT' : 'AWAITING'}
                         </p>
                         <p className="text-[9px] font-mono text-gray-600 tracking-wider">

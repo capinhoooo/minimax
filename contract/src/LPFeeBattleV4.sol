@@ -169,7 +169,7 @@ contract LPFeeBattleV4 is IERC721Receiver, ReentrancyGuard, Pausable {
 
     /// @notice Set Chainlink price feed
     function setPriceFeed(address token, address priceFeed) external onlyOwner {
-        if (token == address(0) || priceFeed == address(0)) revert ZeroAddress();
+        if (priceFeed == address(0)) revert ZeroAddress();
         priceFeeds[token] = priceFeed;
         emit PriceFeedSet(token, priceFeed);
     }

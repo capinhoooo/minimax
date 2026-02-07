@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePublicClient } from 'wagmi';
 import { sepolia } from 'wagmi/chains';
-import { type Log, parseAbiItem } from 'viem';
-import { CONTRACTS, RANGE_VAULT_ABI, FEE_VAULT_ABI, getVaultAddress } from '../lib/contracts';
+import { type Log } from 'viem';
+import { RANGE_VAULT_ABI, FEE_VAULT_ABI, getVaultAddress } from '../lib/contracts';
 import { formatAddress } from '../lib/utils';
 import type { VaultType } from '../types';
 
@@ -19,6 +19,9 @@ function getAbi(vaultType: VaultType) {
   return vaultType === 'range' ? RANGE_VAULT_ABI : FEE_VAULT_ABI;
 }
 
+// Lookback ~50k blocks (~7 days on Sepolia at ~12s/block)
+const BLOCK_LOOKBACK = 50000n;
+
 export function useBattleEvents(battleId: bigint | undefined, vaultType: VaultType) {
   const client = usePublicClient({ chainId: sepolia.id });
   const [events, setEvents] = useState<BattleEvent[]>([]);
@@ -32,6 +35,10 @@ export function useBattleEvents(battleId: bigint | undefined, vaultType: VaultTy
       const address = getVaultAddress(vaultType);
       const abi = getAbi(vaultType);
 
+      // Get current block and calculate a safe lookback range
+      const currentBlock = await client.getBlockNumber();
+      const fromBlock = currentBlock > BLOCK_LOOKBACK ? currentBlock - BLOCK_LOOKBACK : 0n;
+
       // Fetch all three event types for this battleId
       const [createdLogs, joinedLogs, resolvedLogs] = await Promise.all([
         client.getContractEvents({
@@ -39,22 +46,22 @@ export function useBattleEvents(battleId: bigint | undefined, vaultType: VaultTy
           abi,
           eventName: 'BattleCreated',
           args: { battleId },
-          fromBlock: 'earliest',
-        }).catch(() => [] as Log[]),
+          fromBlock,
+        }).catch((e) => { console.warn('BattleCreated fetch failed:', e); return [] as Log[]; }),
         client.getContractEvents({
           address,
           abi,
           eventName: 'BattleJoined',
           args: { battleId },
-          fromBlock: 'earliest',
-        }).catch(() => [] as Log[]),
+          fromBlock,
+        }).catch((e) => { console.warn('BattleJoined fetch failed:', e); return [] as Log[]; }),
         client.getContractEvents({
           address,
           abi,
           eventName: 'BattleResolved',
           args: { battleId },
-          fromBlock: 'earliest',
-        }).catch(() => [] as Log[]),
+          fromBlock,
+        }).catch((e) => { console.warn('BattleResolved fetch failed:', e); return [] as Log[]; }),
       ]);
 
       // Collect unique block numbers

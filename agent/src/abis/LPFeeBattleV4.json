@@ -208,6 +208,36 @@
         ]
       },
       {
+        "name": "creatorTickLower",
+        "type": "int24",
+        "internalType": "int24"
+      },
+      {
+        "name": "creatorTickUpper",
+        "type": "int24",
+        "internalType": "int24"
+      },
+      {
+        "name": "opponentTickLower",
+        "type": "int24",
+        "internalType": "int24"
+      },
+      {
+        "name": "opponentTickUpper",
+        "type": "int24",
+        "internalType": "int24"
+      },
+      {
+        "name": "creatorLiquidity",
+        "type": "uint128",
+        "internalType": "uint128"
+      },
+      {
+        "name": "opponentLiquidity",
+        "type": "uint128",
+        "internalType": "uint128"
+      },
+      {
         "name": "startTime",
         "type": "uint256",
         "internalType": "uint256"
@@ -218,22 +248,22 @@
         "internalType": "uint256"
       },
       {
-        "name": "creatorStartFee0",
+        "name": "creatorStartFeeGrowth0",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "creatorStartFee1",
+        "name": "creatorStartFeeGrowth1",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "opponentStartFee0",
+        "name": "opponentStartFeeGrowth0",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "opponentStartFee1",
+        "name": "opponentStartFeeGrowth1",
         "type": "uint256",
         "internalType": "uint256"
       },
