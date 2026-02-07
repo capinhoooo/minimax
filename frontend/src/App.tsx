@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { config } from './config/wagmi';
+import { WalletModalProvider } from './context/WalletModalContext';
+import WalletModal from './components/wallet/WalletModal';
 
 // Layout
 import Layout from './components/layout/Layout';
@@ -33,6 +35,8 @@ function App() {
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
+        <WalletModalProvider>
+        <WalletModal />
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Layout />}>
@@ -48,6 +52,7 @@ function App() {
             </Route>
           </Routes>
         </BrowserRouter>
+        </WalletModalProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );
