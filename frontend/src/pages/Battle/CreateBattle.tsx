@@ -3,28 +3,33 @@ import { useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { Loader2 } from 'lucide-react';
 import { useCreateBattle } from '../../hooks/useBattleVault';
-import { usePositionBalance, useIsApprovedForAll, useSetApprovalForAll } from '../../hooks/usePositionManager';
-import { CONTRACTS, getVaultAddress } from '../../lib/contracts';
+import { usePositionBalance, useUserPositions, useIsApprovedForAll, useSetApprovalForAll } from '../../hooks/usePositionManager';
+import { getVaultAddress } from '../../lib/contracts';
 import type { VaultType } from '../../types';
 
-const durationOptions = [
-  { label: '1 HOUR', value: 3600 },
-  { label: '24 HOURS', value: 86400 },
-  { label: '3 DAYS', value: 259200 },
-  { label: '7 DAYS', value: 604800 },
-];
+const durationUnits = [
+  { label: 'SEC', unit: 'seconds', multiplier: 1 },
+  { label: 'MIN', unit: 'minutes', multiplier: 60 },
+  { label: 'HRS', unit: 'hours', multiplier: 3600 },
+  { label: 'DAYS', unit: 'days', multiplier: 86400 },
+  { label: 'MON', unit: 'months', multiplier: 2592000 },
+  { label: 'YRS', unit: 'years', multiplier: 31536000 },
+] as const;
 
 export default function CreateBattle() {
   const navigate = useNavigate();
   const { address, isConnected } = useAccount();
 
   const [vaultType, setVaultType] = useState<VaultType>('range');
-  const [tokenId, setTokenId] = useState('');
-  const [duration, setDuration] = useState(86400);
+  const [tokenId, setTokenId] = useState<bigint | null>(null);
+  const [durationAmount, setDurationAmount] = useState('1');
+  const [durationUnit, setDurationUnit] = useState<typeof durationUnits[number]>(durationUnits[2]); // default: hours
 
-  // Check if user has LP positions
+  const durationSeconds = Math.floor(Number(durationAmount || 0) * durationUnit.multiplier);
+
+  // Fetch user's LP positions
   const { data: positionBalance } = usePositionBalance(address);
-  const hasPositions = positionBalance !== undefined && (positionBalance as bigint) > 0n;
+  const { tokenIds: userPositions, isLoading: loadingPositions } = useUserPositions(address, positionBalance as bigint | undefined);
 
   // Check approval status
   const vaultAddress = getVaultAddress(vaultType);
@@ -51,8 +56,8 @@ export default function CreateBattle() {
   };
 
   const handleCreate = () => {
-    if (!tokenId) return;
-    createBattle(BigInt(tokenId), BigInt(duration));
+    if (tokenId === null) return;
+    createBattle(tokenId, BigInt(durationSeconds));
   };
 
   const needsApproval = !isApproved;
@@ -111,25 +116,65 @@ export default function CreateBattle() {
                 </p>
               </div>
 
-              {/* LP Position Token ID */}
+              {/* LP Position Selector */}
               <div>
                 <label className="block text-xs font-mono font-bold tracking-wider mb-2" style={{ color: '#42c7e6' }}>
-                  LP POSITION TOKEN ID
+                  SELECT LP POSITION
                 </label>
-                <input
-                  type="number"
-                  value={tokenId}
-                  onChange={(e) => setTokenId(e.target.value)}
-                  placeholder="Enter your V4 position NFT token ID"
-                  className="w-full px-4 py-3 rounded-lg text-sm font-mono text-gray-300 outline-none placeholder-gray-600"
-                  style={{
-                    background: 'rgba(15, 15, 15, 0.9)',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                  }}
-                />
-                {address && (
+                {!isConnected ? (
+                  <div
+                    className="w-full px-4 py-3 rounded-lg text-sm font-mono text-gray-600 tracking-wider"
+                    style={{
+                      background: 'rgba(15, 15, 15, 0.9)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                    }}
+                  >
+                    CONNECT WALLET TO VIEW POSITIONS
+                  </div>
+                ) : loadingPositions ? (
+                  <div
+                    className="w-full px-4 py-3 rounded-lg text-sm font-mono text-gray-500 tracking-wider flex items-center gap-2"
+                    style={{
+                      background: 'rgba(15, 15, 15, 0.9)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                    }}
+                  >
+                    <Loader2 className="h-4 w-4 animate-spin" /> SCANNING POSITIONS...
+                  </div>
+                ) : userPositions.length === 0 ? (
+                  <div
+                    className="w-full px-4 py-3 rounded-lg text-sm font-mono text-gray-500 tracking-wider"
+                    style={{
+                      background: 'rgba(15, 15, 15, 0.9)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                    }}
+                  >
+                    NO LP POSITIONS FOUND
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {userPositions.map((id) => (
+                      <button
+                        key={id.toString()}
+                        onClick={() => setTokenId(id)}
+                        className="w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-mono font-bold tracking-wider transition-all"
+                        style={{
+                          background: tokenId === id ? 'rgba(66, 199, 230, 0.15)' : 'rgba(15, 15, 15, 0.9)',
+                          border: tokenId === id ? '1px solid rgba(66, 199, 230, 0.5)' : '1px solid rgba(255, 255, 255, 0.1)',
+                          color: tokenId === id ? '#42c7e6' : '#6b7280',
+                        }}
+                      >
+                        <span>POSITION #{id.toString()}</span>
+                        {tokenId === id && (
+                          <span className="text-[10px] tracking-widest" style={{ color: '#22c55e' }}>SELECTED</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {address && userPositions.length > 0 && (
                   <p className="text-[10px] font-mono text-gray-600 mt-2 tracking-wider">
-                    YOUR POSITIONS: {positionBalance !== undefined ? (positionBalance as bigint).toString() : '...'} NFTs found
+                    {userPositions.length} POSITION{userPositions.length !== 1 ? 'S' : ''} AVAILABLE
                   </p>
                 )}
               </div>
@@ -139,26 +184,40 @@ export default function CreateBattle() {
                 <label className="block text-xs font-mono font-bold tracking-wider mb-2" style={{ color: '#42c7e6' }}>
                   BATTLE DURATION
                 </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {durationOptions.map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setDuration(opt.value)}
-                      className="px-3 py-2.5 rounded-lg text-xs font-mono font-bold tracking-wider transition-all"
-                      style={{
-                        background: duration === opt.value
-                          ? 'rgba(66, 199, 230, 0.15)'
-                          : 'rgba(15, 15, 15, 0.9)',
-                        border: duration === opt.value
-                          ? '1px solid rgba(66, 199, 230, 0.5)'
-                          : '1px solid rgba(255, 255, 255, 0.1)',
-                        color: duration === opt.value ? '#42c7e6' : '#6b7280',
-                      }}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+                <div className="flex gap-3 mb-3">
+                  <input
+                    type="number"
+                    min="1"
+                    value={durationAmount}
+                    onChange={(e) => setDurationAmount(e.target.value)}
+                    className="flex-1 px-4 py-3 rounded-lg text-sm font-mono text-gray-300 outline-none"
+                    style={{
+                      background: 'rgba(15, 15, 15, 0.9)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                    }}
+                  />
+                  <select
+                    value={durationUnit.unit}
+                    onChange={(e) => setDurationUnit(durationUnits.find((u) => u.unit === e.target.value)!)}
+                    className="px-4 py-3 rounded-lg text-sm font-mono font-bold tracking-wider outline-none appearance-none cursor-pointer"
+                    style={{
+                      background: 'rgba(15, 15, 15, 0.9)',
+                      border: '1px solid rgba(66, 199, 230, 0.5)',
+                      color: '#42c7e6',
+                    }}
+                  >
+                    {durationUnits.map((u) => (
+                      <option key={u.unit} value={u.unit}>
+                        {u.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
+                {durationSeconds > 0 && (
+                  <p className="text-[10px] font-mono text-gray-600 tracking-wider">
+                    TOTAL: {durationSeconds.toLocaleString()} SECONDS
+                  </p>
+                )}
               </div>             
             </div>
           </div>
@@ -200,13 +259,13 @@ export default function CreateBattle() {
                   <div>
                     <p className="text-[10px] font-mono tracking-wider text-gray-500 mb-1">TOKEN ID</p>
                     <p className="text-lg font-black" style={{ color: '#42c7e6' }}>
-                      #{tokenId || '---'}
+                      #{tokenId !== null ? tokenId.toString() : '---'}
                     </p>
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] font-mono tracking-wider text-gray-500 mb-1">DURATION</p>
                     <p className="text-lg font-black text-white">
-                      {durationOptions.find((d) => d.value === duration)?.label}
+                      {durationAmount || '0'} {durationUnit.label}
                     </p>
                   </div>
                 </div>
@@ -285,7 +344,7 @@ export default function CreateBattle() {
             ) : (
               <button
                 onClick={handleCreate}
-                disabled={createPending || !tokenId}
+                disabled={createPending || tokenId === null || durationSeconds <= 0}
                 className="w-full py-4 rounded-lg text-center font-black text-lg tracking-widest transition-all hover:opacity-90 disabled:opacity-50"
                 style={{
                   background: 'transparent',
