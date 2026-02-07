@@ -1,5 +1,8 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react';
+import uniswapSvg from '../assets/uniswap.svg';
+import priceSvg from '../assets/price.svg';
+import feesSvg from '../assets/fees.svg';
 
 // Chart data for the pool visualization
 const chartData = [
@@ -220,13 +223,13 @@ export default function Home() {
                     to="/stake"
                     className="flex-1 btn-glow-magenta text-center py-3 text-sm"
                   >
-                    Stake &gt;
+                    Add Liquidity &gt;
                   </Link>
                   <Link
                     to="/battle"
                     className="flex-1 btn-glow-magenta text-center py-3 text-sm"
                   >
-                    Challenge &gt;
+                    Find Battle &gt;
                   </Link>
                 </div>
               </div>
@@ -247,120 +250,38 @@ export default function Home() {
               >
                 {/* Feature 1 Illustration: Smart Staking Hooks */}
                 <div
-                  className="absolute inset-0 transition-all duration-500"
+                  className="absolute inset-0 transition-all duration-500 flex items-center justify-center"
                   style={{
                     opacity: activeFeature === 0 ? 1 : 0,
                     transform: activeFeature === 0 ? 'translateY(0) scale(1)' : 'translateY(20px) scale(0.95)',
                     pointerEvents: activeFeature === 0 ? 'auto' : 'none',
                   }}
                 >
-                  <div className="terminal-card p-6 max-w-md">
-                    <div className="flex items-center gap-1.5 mb-6">
-                      <div className="w-2 h-2 rounded-sm bg-gray-600" />
-                      <div className="w-2 h-2 rounded-sm bg-gray-600" />
-                    </div>
-                    <div className="flex justify-center mb-8">
-                      <div className="relative w-28 h-28">
-                        <div
-                          className="absolute inset-0 rotate-45 border-2 border-white/80 rounded-lg"
-                          style={{
-                            boxShadow: '0 0 20px rgba(255, 255, 255, 0.3), inset 0 0 20px rgba(255, 255, 255, 0.1)'
-                          }}
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-white text-3xl font-bold tracking-wider">V4</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      <div className="h-3 bg-gray-800 rounded overflow-hidden">
-                        <div
-                          className="h-full w-4/5 rounded transition-all duration-1000"
-                          style={{ background: 'linear-gradient(90deg, #ed7f2f, #8a3815)' }}
-                        />
-                      </div>
-                      <div className="h-3 bg-gray-800 rounded overflow-hidden">
-                        <div
-                          className="h-full w-3/5 rounded transition-all duration-1000"
-                          style={{ background: 'linear-gradient(90deg, #42c7e6, #0e4d9d)' }}
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  <img src={uniswapSvg} alt="Uniswap V4 Hooks" className="max-h-[300px] w-auto" />
                 </div>
 
                 {/* Feature 2 Illustration: Range Dominance Battles */}
                 <div
-                  className="absolute inset-0 transition-all duration-500"
+                  className="absolute inset-0 transition-all duration-500 flex items-center justify-center"
                   style={{
                     opacity: activeFeature === 1 ? 1 : 0,
                     transform: activeFeature === 1 ? 'translateY(0) scale(1)' : 'translateY(20px) scale(0.95)',
                     pointerEvents: activeFeature === 1 ? 'auto' : 'none',
                   }}
                 >
-                  <div className="relative">
-                    <div
-                      className="absolute -top-4 right-8 w-16 h-16 rounded-full border-2"
-                      style={{ borderColor: '#42c7e6', boxShadow: '0 0 20px rgba(66, 199, 230, 0.4)' }}
-                    />
-                    <div className="terminal-card p-6 max-w-md">
-                      <div className="flex items-center gap-2 mb-6">
-                        <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: '#ed7f2f' }} />
-                        <span className="text-xs font-mono tracking-wider" style={{ color: '#ed7f2f' }}>LIVE BATTLE</span>
-                      </div>
-                      <div className="flex items-center justify-center gap-4">
-                        <div
-                          className="w-24 h-28 rounded border-2"
-                          style={{
-                            borderColor: 'rgba(237, 127, 47, 0.5)',
-                            background: 'linear-gradient(180deg, #ed7f2f 0%, #8a3815 100%)',
-                            boxShadow: '0 0 30px rgba(237, 127, 47, 0.4)'
-                          }}
-                        />
-                        <span className="text-white/60 text-xl font-bold">VS</span>
-                        <div
-                          className="w-24 h-28 rounded border-2"
-                          style={{
-                            borderColor: 'rgba(66, 199, 230, 0.5)',
-                            background: 'linear-gradient(180deg, #42c7e6 0%, #0e4d9d 100%)',
-                            boxShadow: '0 0 30px rgba(66, 199, 230, 0.4)'
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  <img src={priceSvg} alt="Range Dominance Battles" className="max-h-[300px] w-auto" />
                 </div>
 
                 {/* Feature 3 Illustration: Winner Takes All */}
                 <div
-                  className="absolute inset-0 transition-all duration-500"
+                  className="absolute inset-0 transition-all duration-500 flex items-center justify-center"
                   style={{
                     opacity: activeFeature === 2 ? 1 : 0,
                     transform: activeFeature === 2 ? 'translateY(0) scale(1)' : 'translateY(20px) scale(0.95)',
                     pointerEvents: activeFeature === 2 ? 'auto' : 'none',
                   }}
                 >
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="w-48 h-32 bg-accent-magenta/20 blur-[60px] rounded-full" />
-                    </div>
-                    <div className="terminal-card p-6 max-w-md relative">
-                      <div className="flex items-center gap-1.5 mb-6">
-                        <div className="w-2 h-2 rounded-sm bg-gray-600" />
-                      </div>
-                      <div className="flex items-center justify-center gap-4 py-4">
-                        <div className="w-16 h-20 rounded border border-gray-700 bg-gray-900/80" />
-                        <div
-                          className="w-16 h-20 rounded border-2 border-accent-magenta"
-                          style={{
-                            background: 'linear-gradient(180deg, rgba(237, 127, 47, 0.3) 0%, rgba(138, 56, 21, 0.3) 100%)',
-                            boxShadow: '0 0 30px rgba(237, 127, 47, 0.5), inset 0 0 20px rgba(237, 127, 47, 0.2)'
-                          }}
-                        />
-                        <div className="w-16 h-20 rounded border border-gray-700 bg-gray-900/80" />
-                      </div>
-                    </div>
-                  </div>
+                  <img src={feesSvg} alt="Winner Takes All" className="max-h-[300px] w-auto" />
                 </div>
 
               </div>
@@ -369,7 +290,7 @@ export default function Home() {
             {/* Right Column - Scrolling Content */}
             <div>
               {/* Feature 1 Content */}
-              <div ref={feature1Ref} className="pt-[calc(50vh-150px)] pb-24">
+              <div ref={feature1Ref} className="">
                 <div className="feature-content-card p-8 rounded-lg border border-gray-700/50 w-full">
                   <h3 className="text-2xl sm:text-3xl font-black text-[#42c7e6] italic mb-6 tracking-tight">
                     SMART STAKING HOOKS
@@ -406,7 +327,7 @@ export default function Home() {
               </div>
 
               {/* Feature 3 Content */}
-              <div ref={feature3Ref} className="py-24">
+              <div ref={feature3Ref}>
                 <div className="feature-content-card p-8 rounded-lg border border-gray-700/50 w-full">
                   <h3 className="text-2xl sm:text-3xl font-black text-[#42c7e6] italic mb-6 tracking-tight">
                     WINNER TAKES ALL
@@ -430,30 +351,8 @@ export default function Home() {
           <div className="lg:hidden space-y-12">
             {/* Feature 1 */}
             <div className="space-y-6">
-              <div className="terminal-card p-6 max-w-md mx-auto">
-                <div className="flex items-center gap-1.5 mb-6">
-                  <div className="w-2 h-2 rounded-sm bg-gray-600" />
-                  <div className="w-2 h-2 rounded-sm bg-gray-600" />
-                </div>
-                <div className="flex justify-center mb-8">
-                  <div className="relative w-28 h-28">
-                    <div
-                      className="absolute inset-0 rotate-45 border-2 border-white/80 rounded-lg"
-                      style={{ boxShadow: '0 0 20px rgba(255, 255, 255, 0.3)' }}
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-white text-3xl font-bold">V4</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="h-3 bg-gray-800 rounded overflow-hidden">
-                    <div className="h-full w-4/5 rounded" style={{ background: 'linear-gradient(90deg, #ed7f2f, #8a3815)' }} />
-                  </div>
-                  <div className="h-3 bg-gray-800 rounded overflow-hidden">
-                    <div className="h-full w-3/5 rounded" style={{ background: 'linear-gradient(90deg, #42c7e6, #0e4d9d)' }} />
-                  </div>
-                </div>
+              <div className="flex justify-center">
+                <img src={uniswapSvg} alt="Uniswap V4 Hooks" className="max-h-[200px] w-auto" />
               </div>
               <div className="feature-content-card p-6 rounded-lg border border-gray-700/50">
                 <h3 className="text-xl font-black text-[#42c7e6] italic mb-4">SMART STAKING HOOKS</h3>
@@ -465,16 +364,8 @@ export default function Home() {
 
             {/* Feature 2 */}
             <div className="space-y-6">
-              <div className="terminal-card p-6 max-w-md mx-auto">
-                <div className="flex items-center gap-2 mb-6">
-                  <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: '#ed7f2f' }} />
-                  <span className="text-xs font-mono" style={{ color: '#ed7f2f' }}>LIVE BATTLE</span>
-                </div>
-                <div className="flex items-center justify-center gap-4">
-                  <div className="w-20 h-24 rounded border-2" style={{ borderColor: 'rgba(237, 127, 47, 0.5)', background: 'linear-gradient(180deg, #ed7f2f, #8a3815)' }} />
-                  <span className="text-white/60 font-bold">VS</span>
-                  <div className="w-20 h-24 rounded border-2" style={{ borderColor: 'rgba(66, 199, 230, 0.5)', background: 'linear-gradient(180deg, #42c7e6, #0e4d9d)' }} />
-                </div>
+              <div className="flex justify-center">
+                <img src={priceSvg} alt="Range Dominance Battles" className="max-h-[200px] w-auto" />
               </div>
               <div className="feature-content-card p-6 rounded-lg border border-gray-700/50">
                 <h3 className="text-xl font-black text-[#42c7e6] italic mb-4">RANGE DOMINANCE BATTLES</h3>
@@ -486,15 +377,8 @@ export default function Home() {
 
             {/* Feature 3 */}
             <div className="space-y-6">
-              <div className="terminal-card p-6 max-w-md mx-auto">
-                <div className="flex items-center gap-1.5 mb-6">
-                  <div className="w-2 h-2 rounded-sm bg-gray-600" />
-                </div>
-                <div className="flex items-center justify-center gap-4 py-4">
-                  <div className="w-14 h-18 rounded border border-gray-700 bg-gray-900/80" />
-                  <div className="w-14 h-18 rounded border-2 border-accent-magenta" style={{ background: 'linear-gradient(180deg, rgba(237, 127, 47, 0.3), rgba(138, 56, 21, 0.3))' }} />
-                  <div className="w-14 h-18 rounded border border-gray-700 bg-gray-900/80" />
-                </div>
+              <div className="flex justify-center">
+                <img src={feesSvg} alt="Winner Takes All" className="max-h-[200px] w-auto" />
               </div>
               <div className="feature-content-card p-6 rounded-lg border border-gray-700/50">
                 <h3 className="text-xl font-black text-[#42c7e6] italic mb-4">WINNER TAKES ALL</h3>
@@ -508,25 +392,105 @@ export default function Home() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-4">
-        <div
-          className="mx-auto max-w-2xl text-center"
-          style={{
-            opacity: mounted ? 1 : 0,
-            transform: mounted ? 'translateY(0)' : 'translateY(20px)',
-            transition: 'all 0.6s ease-out 1.5s'
-          }}
-        >
-          <h2 className="text-2xl font-bold mb-4 text-white">Ready to Enter the Arena?</h2>
-          <p className="text-gray-400 mb-8 text-sm">
-            Connect your wallet and start battling. May the best LP win.
-          </p>
-          <Link
-            to="/battle"
-            className="btn-glow-magenta inline-block px-8 py-4"
+      <section className="py-24 px-4 relative">
+        {/* Background glow */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-accent-magenta/5 blur-[120px] rounded-full" />
+        </div>
+
+        <div className="relative mx-auto max-w-5xl">
+          {/* Main CTA Card */}
+          <div
+            className="rounded-xl overflow-hidden"
+            style={{
+              border: '1px solid rgba(237, 127, 47, 0.3)',
+              boxShadow: '0 0 60px rgba(237, 127, 47, 0.08)',
+              background: 'linear-gradient(135deg, rgba(10, 10, 10, 0.95), rgba(1, 1, 1, 0.98))',
+            }}
           >
-            Launch App &gt;
-          </Link>
+            {/* Terminal Header Bar */}
+            <div
+              className="flex items-center justify-between px-5 py-3"
+              style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
+                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
+                <div className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
+              </div>
+              <span className="text-[10px] font-mono tracking-widest text-gray-600">ARENA_PROTOCOL_V4 // MAINNET</span>
+            </div>
+
+            <div className="p-8 sm:p-12">
+              {/* Title */}
+              <div className="text-center mb-10">
+                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black mb-4 tracking-tight">
+                  <span className="gradient-text-magenta italic">ENTER THE ARENA</span>
+                </h2>
+                <p className="text-xs sm:text-sm tracking-[0.3em] text-gray-500 uppercase font-mono">
+                  Deploy your liquidity. Challenge opponents. Claim victory.
+                </p>
+              </div>
+
+              {/* Stats Row */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-10">
+                {[
+                  { label: 'TOTAL BATTLES', value: '1,247', color: '#ed7f2f' },
+                  { label: 'ACTIVE ARENAS', value: '89', color: '#22c55e' },
+                  { label: 'TVL LOCKED', value: '$2.4M', color: '#42c7e6' },
+                ].map((stat) => (
+                  <div
+                    key={stat.label}
+                    className="rounded-lg p-4 text-center"
+                    style={{
+                      background: 'rgba(15, 15, 15, 0.8)',
+                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                    }}
+                  >
+                    <p className="text-xl sm:text-2xl font-black font-mono" style={{ color: stat.color }}>
+                      {stat.value}
+                    </p>
+                    <p className="text-[9px] font-mono tracking-widest text-gray-600 mt-1">{stat.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
+                <Link
+                  to="/battle"
+                  className="flex-1 py-4 rounded-lg text-center font-black text-sm tracking-widest transition-all hover:opacity-90"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(237, 127, 47, 0.2), rgba(138, 56, 21, 0.2))',
+                    border: '2px solid rgba(237, 127, 47, 0.6)',
+                    color: '#ed7f2f',
+                    boxShadow: '0 0 25px rgba(237, 127, 47, 0.15)',
+                  }}
+                >
+                  START BATTLE
+                </Link>
+                <Link
+                  to="/lobby"
+                  className="flex-1 py-4 rounded-lg text-center font-black text-sm tracking-widest transition-all hover:opacity-90"
+                  style={{
+                    background: 'rgba(15, 15, 15, 0.8)',
+                    border: '2px solid rgba(66, 199, 230, 0.4)',
+                    color: '#42c7e6',
+                    boxShadow: '0 0 25px rgba(66, 199, 230, 0.1)',
+                  }}
+                >
+                  VIEW LOBBY
+                </Link>
+              </div>
+
+              {/* Bottom Terminal Line */}
+              <div className="mt-10 text-center">
+                <p className="text-[10px] font-mono text-gray-600 tracking-wider">
+                  STATUS: <span style={{ color: '#22c55e' }}>ONLINE</span> // CHAIN: ETHEREUM // PROTOCOL: UNISWAP V4 // BUILD: STABLE
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </div>
