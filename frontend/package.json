@@ -10,8 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@bigmi/react": "^0.7.0",
     "@lifi/sdk": "^3.15.5",
     "@lifi/widget": "^3.40.6",
+    "@mysten/dapp-kit": "^1.0.1",
+    "@solana/wallet-adapter-react": "^0.15.39",
     "@tanstack/react-query": "^5.90.20",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -19,6 +22,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.0",
+    "recharts": "^3.7.0",
     "tailwind-merge": "^3.4.0",
     "viem": "2.x",
     "wagmi": "^3.4.2"

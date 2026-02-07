@@ -1,7 +1,19 @@
-import { useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useState, useEffect } from 'react';
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
 import { sepolia } from 'wagmi/chains';
 import type { Address } from 'viem';
 import { CONTRACTS, ERC721_ABI } from '../lib/contracts';
+
+// Minimal ABI for nextTokenId (public state variable on V4 PositionManager)
+const NEXT_TOKEN_ID_ABI = [
+  {
+    name: 'nextTokenId',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+] as const;
 
 /** Get the number of LP positions owned by an address */
 export function usePositionBalance(owner: Address | undefined) {
@@ -15,42 +27,103 @@ export function usePositionBalance(owner: Address | undefined) {
   });
 }
 
-/** Get a position token ID by owner and index */
-export function usePositionTokenByIndex(owner: Address | undefined, index: bigint) {
-  return useReadContract({
+/** Get all position token IDs owned by an address */
+export function useUserPositions(owner: Address | undefined) {
+  const publicClient = usePublicClient({ chainId: sepolia.id });
+  const [tokenIds, setTokenIds] = useState<bigint[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // How many positions does this user own?
+  const { data: balanceData } = useReadContract({
     address: CONTRACTS.POSITION_MANAGER,
     abi: ERC721_ABI,
-    functionName: 'tokenOfOwnerByIndex',
-    args: owner ? [owner, index] : undefined,
+    functionName: 'balanceOf',
+    args: owner ? [owner] : undefined,
     chainId: sepolia.id,
     query: { enabled: !!owner },
   });
-}
 
-/** Get all position token IDs owned by an address */
-export function useUserPositions(owner: Address | undefined, balance: bigint | undefined) {
-  const count = balance !== undefined ? Number(balance) : 0;
-  const indices = Array.from({ length: count }, (_, i) => BigInt(i));
-
-  const { data, isLoading } = useReadContracts({
-    contracts: indices.map((index) => ({
-      address: CONTRACTS.POSITION_MANAGER,
-      abi: ERC721_ABI,
-      functionName: 'tokenOfOwnerByIndex' as const,
-      args: [owner!, index] as const,
-      chainId: sepolia.id,
-    })),
-    query: { enabled: !!owner && count > 0 },
+  // What's the latest minted token ID? (upper bound for search)
+  const { data: nextIdData } = useReadContract({
+    address: CONTRACTS.POSITION_MANAGER,
+    abi: NEXT_TOKEN_ID_ABI,
+    functionName: 'nextTokenId',
+    chainId: sepolia.id,
+    query: { enabled: !!owner },
   });
 
-  const tokenIds: bigint[] = [];
-  if (data) {
-    for (const r of data) {
-      if (r.status === 'success' && r.result !== undefined) {
-        tokenIds.push(r.result as bigint);
-      }
+  const balance = balanceData as bigint | undefined;
+  const nextId = nextIdData as bigint | undefined;
+
+  useEffect(() => {
+    const count = balance !== undefined ? Number(balance) : 0;
+    const maxTokenId = nextId !== undefined ? Number(nextId) : 0;
+
+    if (!owner || !publicClient || count === 0 || maxTokenId === 0) {
+      setTokenIds([]);
+      return;
     }
-  }
+
+    let cancelled = false;
+    setIsLoading(true);
+
+    const fetchPositions = async () => {
+      try {
+        const found: bigint[] = [];
+        const BATCH_SIZE = 500;
+
+        // Search backwards from the most recently minted token
+        for (let end = maxTokenId - 1; end >= 1 && found.length < count; end -= BATCH_SIZE) {
+          const start = Math.max(end - BATCH_SIZE + 1, 1);
+          const batchIds: bigint[] = [];
+          for (let id = end; id >= start; id--) {
+            batchIds.push(BigInt(id));
+          }
+
+          const results = await publicClient.multicall({
+            contracts: batchIds.map((id) => ({
+              address: CONTRACTS.POSITION_MANAGER,
+              abi: ERC721_ABI,
+              functionName: 'ownerOf' as const,
+              args: [id] as const,
+            })),
+          });
+
+          for (let i = 0; i < results.length; i++) {
+            const result = results[i];
+            if (
+              result.status === 'success' &&
+              typeof result.result === 'string' &&
+              result.result.toLowerCase() === owner.toLowerCase()
+            ) {
+              found.push(batchIds[i]);
+            }
+          }
+
+          if (cancelled) return;
+        }
+
+        if (!cancelled) {
+          setTokenIds(found);
+        }
+      } catch (error) {
+        console.error('Error fetching LP positions:', error);
+        if (!cancelled) {
+          setTokenIds([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchPositions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [owner, publicClient, balance, nextId]);
 
   return { tokenIds, isLoading };
 }

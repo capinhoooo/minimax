@@ -14,7 +14,7 @@ import Home from './pages/Home';
 import BattleArena from './pages/Battle/BattleArena';
 import BattleDetail from './pages/Battle/BattleDetail';
 import CreateBattle from './pages/Battle/CreateBattle';
-import Agent from './pages/Agent';
+import Profile from './pages/Profile';
 import Leaderboard from './pages/Leaderboard';
 import Lobby from './pages/Lobby';
 
@@ -48,7 +48,7 @@ function App() {
               <Route path="swap" element={<Suspense fallback={<div className="flex items-center justify-center min-h-screen"><span className="text-sm font-mono text-gray-500 tracking-wider">LOADING SWAP ENGINE...</span></div>}><Swap /></Suspense>} />
               <Route path="bridge" element={<Suspense fallback={<div className="flex items-center justify-center min-h-screen"><span className="text-sm font-mono text-gray-500 tracking-wider">LOADING BRIDGE...</span></div>}><Swap /></Suspense>} />
               <Route path="lobby" element={<Lobby />} />
-              <Route path="agent" element={<Agent />} />
+              <Route path="profile" element={<Profile />} />
             </Route>
           </Routes>
         </BrowserRouter>

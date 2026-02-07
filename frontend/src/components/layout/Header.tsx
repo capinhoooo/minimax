@@ -7,6 +7,7 @@ const navigation = [
   { name: 'BATTLES', href: '/battle', hasBadge: true },
   { name: 'LEADERBOARD', href: '/leaderboard' },
   { name: 'SWAP / BRIDGE', href: '/swap' },
+  { name: 'PROFILE', href: '/profile' },
 ];
 
 export default function Header() {

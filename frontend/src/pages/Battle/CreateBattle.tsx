@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { Loader2 } from 'lucide-react';
 import { useCreateBattle } from '../../hooks/useBattleVault';
-import { usePositionBalance, useUserPositions, useIsApprovedForAll, useSetApprovalForAll } from '../../hooks/usePositionManager';
+import { useUserPositions, useIsApprovedForAll, useSetApprovalForAll } from '../../hooks/usePositionManager';
 import { getVaultAddress } from '../../lib/contracts';
 import type { VaultType } from '../../types';
 
@@ -28,8 +28,7 @@ export default function CreateBattle() {
   const durationSeconds = Math.floor(Number(durationAmount || 0) * durationUnit.multiplier);
 
   // Fetch user's LP positions
-  const { data: positionBalance } = usePositionBalance(address);
-  const { tokenIds: userPositions, isLoading: loadingPositions } = useUserPositions(address, positionBalance as bigint | undefined);
+  const { tokenIds: userPositions, isLoading: loadingPositions } = useUserPositions(address);
 
   // Check approval status
   const vaultAddress = getVaultAddress(vaultType);

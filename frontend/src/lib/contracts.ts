@@ -24,7 +24,7 @@ export const CCTP_CHAINS: CctpChain[] = [
     usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' as Address,
     tokenMessenger: CCTP_TOKEN_MESSENGER,
     messageTransmitter: CCTP_MESSAGE_TRANSMITTER,
-    rpcUrl: 'https://eth-sepolia.g.alchemy.com/v2/demo',
+    rpcUrl: "https://1rpc.sepolia.org",
   },
   {
     chainId: 43113,
@@ -161,8 +161,8 @@ export const MESSAGE_TRANSMITTER_ABI = [
 export const CONTRACTS = {
   RANGE_VAULT: '0x3363363702f98e8CE93871996c5163b79238cE5a' as Address,
   FEE_VAULT: '0x4b188E84c7946Acd21aeB3F718E42C0f1b558950' as Address,
-  POOL_MANAGER: '0x8C4BcBE6b9eF47855f97E675296FA3F6fafa5F1A' as Address,
-  POSITION_MANAGER: '0x1B1C77B606d13b09C84d1c7394B96b147bC03147' as Address,
+  POOL_MANAGER: '0xE03A1074c86CFeDd5C142C4F04F1a1536e203543' as Address,
+  POSITION_MANAGER: '0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4' as Address,
   USDC: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' as Address,
 } as const;
 
@@ -491,16 +491,6 @@ export const ERC721_ABI = [
     stateMutability: 'view',
     inputs: [{ name: 'tokenId', type: 'uint256' }],
     outputs: [{ type: 'address' }],
-  },
-  {
-    name: 'tokenOfOwnerByIndex',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [
-      { name: 'owner', type: 'address' },
-      { name: 'index', type: 'uint256' },
-    ],
-    outputs: [{ type: 'uint256' }],
   },
   {
     name: 'approve',

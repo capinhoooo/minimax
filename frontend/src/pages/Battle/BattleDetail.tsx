@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Loader2, ArrowLeft, Shield, Swords, Clock, Trophy } from 'lucide-react';
+import { Loader2, ArrowLeft, Shield, Swords, Clock, Trophy, ExternalLink } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import {
   useRangeBattle,
@@ -8,17 +8,13 @@ import {
   useTimeRemaining,
   useCurrentPerformance,
   useCurrentFeePerformance,
-  useJoinBattle,
   useResolveBattle,
 } from '../../hooks/useBattleVault';
-import { formatAddress, formatUSD } from '../../lib/utils';
+import { useBattleEvents } from '../../hooks/useBattleEvents';
+import { formatAddress, formatUSD, getExplorerUrl } from '../../lib/utils';
+import JoinBattleModal from '../../components/battle/JoinBattleModal';
+import PerformanceChart from '../../components/battle/PerformanceChart';
 import type { VaultType } from '../../types';
-
-type BattleEvent = {
-  time: string;
-  message: string;
-  type: 'info' | 'creator' | 'opponent' | 'system';
-};
 
 export default function BattleDetail() {
   const { id } = useParams();
@@ -87,8 +83,13 @@ export default function BattleDetail() {
   }, [vaultType, rangeBattleData, feeBattleData]);
 
   // Write hooks
-  const { joinBattle, isPending: joinPending } = useJoinBattle(vaultType);
   const { resolveBattle, isPending: resolvePending } = useResolveBattle(vaultType);
+
+  // Join battle modal
+  const [showJoinModal, setShowJoinModal] = useState(false);
+
+  // On-chain battle events
+  const { events: battleEvents, isLoading: eventsLoading } = useBattleEvents(battleId, vaultType);
 
   // ---- Performance calculations ----
   const perfData = useMemo(() => {
@@ -124,76 +125,6 @@ export default function BattleDetail() {
     }
     return null;
   }, [vaultType, rangePerf, feePerf]);
-
-  // ---- Battle Event Log ----
-  const [events, setEvents] = useState<BattleEvent[]>([]);
-  const prevPerfRef = useRef<{ creatorInRange: boolean; opponentInRange: boolean } | null>(null);
-  const initializedRef = useRef(false);
-
-  const getNow = useCallback(() => {
-    const d = new Date();
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
-  }, []);
-
-  // Add initial events + track state changes
-  useEffect(() => {
-    if (!perfData || !battle) return;
-
-    if (!initializedRef.current) {
-      initializedRef.current = true;
-      const initEvents: BattleEvent[] = [];
-
-      if (battle.status === 'ongoing' || battle.status === 'ready_to_resolve') {
-        initEvents.push({ time: '--:--:--', message: 'Battle started', type: 'system' });
-      }
-      if (perfData.creatorInRange) {
-        initEvents.push({ time: getNow(), message: 'Creator position is IN RANGE', type: 'creator' });
-      }
-      if (perfData.opponentInRange) {
-        initEvents.push({ time: getNow(), message: 'Opponent position is IN RANGE', type: 'opponent' });
-      }
-      if (perfData.leader && perfData.leader !== '0x0000000000000000000000000000000000000000') {
-        initEvents.push({ time: getNow(), message: `Current leader: ${formatAddress(perfData.leader)}`, type: 'info' });
-      }
-      setEvents(initEvents);
-      prevPerfRef.current = { creatorInRange: perfData.creatorInRange, opponentInRange: perfData.opponentInRange };
-      return;
-    }
-
-    // Track state changes
-    const prev = prevPerfRef.current;
-    if (prev) {
-      const newEvents: BattleEvent[] = [];
-      if (prev.creatorInRange !== perfData.creatorInRange) {
-        newEvents.push({
-          time: getNow(),
-          message: perfData.creatorInRange ? 'Creator position went IN RANGE' : 'Creator position went OUT OF RANGE',
-          type: 'creator',
-        });
-      }
-      if (prev.opponentInRange !== perfData.opponentInRange) {
-        newEvents.push({
-          time: getNow(),
-          message: perfData.opponentInRange ? 'Opponent position went IN RANGE' : 'Opponent position went OUT OF RANGE',
-          type: 'opponent',
-        });
-      }
-      if (newEvents.length > 0) {
-        setEvents((prev) => [...newEvents, ...prev].slice(0, 20));
-      }
-    }
-    prevPerfRef.current = { creatorInRange: perfData.creatorInRange, opponentInRange: perfData.opponentInRange };
-  }, [perfData, battle, getNow]);
-
-  // Add resolved event
-  useEffect(() => {
-    if (battle?.isResolved) {
-      setEvents((prev) => {
-        if (prev.some((e) => e.message.includes('RESOLVED'))) return prev;
-        return [{ time: getNow(), message: 'Battle RESOLVED', type: 'system' }, ...prev];
-      });
-    }
-  }, [battle?.isResolved, getNow]);
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -385,21 +316,15 @@ export default function BattleDetail() {
                 </p>
                 {!isCreator && address && (
                   <button
-                    onClick={() => {
-                      const tokenId = prompt('Enter your LP position token ID:');
-                      if (tokenId && battleId !== undefined) {
-                        joinBattle(battleId, BigInt(tokenId));
-                      }
-                    }}
-                    disabled={joinPending}
-                    className="px-8 py-3 rounded-lg font-bold text-sm tracking-wider transition-all hover:opacity-90 disabled:opacity-50"
+                    onClick={() => setShowJoinModal(true)}
+                    className="px-8 py-3 rounded-lg font-bold text-sm tracking-wider transition-all hover:opacity-90"
                     style={{
                       background: 'linear-gradient(135deg, rgba(237, 127, 47, 0.2), rgba(138, 56, 21, 0.2))',
                       border: '1px solid rgba(237, 127, 47, 0.5)',
                       color: '#ed7f2f',
                     }}
                   >
-                    {joinPending ? 'JOINING...' : 'JOIN THIS BATTLE'}
+                    JOIN THIS BATTLE
                   </button>
                 )}
               </div>
@@ -453,6 +378,16 @@ export default function BattleDetail() {
             )}
           </div>
         </div>
+
+        {/* ===== PERFORMANCE CHART ===== */}
+        {battle.opponent !== zeroAddr && (
+          <PerformanceChart
+            perfData={perfData}
+            vaultType={vaultType}
+            creatorAddress={battle.creator}
+            opponentAddress={battle.opponent}
+          />
+        )}
 
         {/* ===== PERFORMANCE COMPARISON ===== */}
         {perfData && battle.opponent !== zeroAddr && (
@@ -570,44 +505,64 @@ export default function BattleDetail() {
           </div>
         )}
 
-        {/* ===== BATTLE LOG ===== */}
-        {events.length > 0 && (
-          <div
-            className="rounded-xl p-6 mb-8"
-            style={{
-              background: 'linear-gradient(135deg, rgba(10, 10, 10, 0.95), rgba(1, 1, 1, 0.98))',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-            }}
-          >
-            <h3 className="text-xs font-bold tracking-widest mb-4" style={{ color: '#ed7f2f' }}>
-              BATTLE LOG
-            </h3>
-            <div className="space-y-2 max-h-48 overflow-y-auto">
-              {events.map((event, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-3 py-1.5"
-                  style={{ borderBottom: i < events.length - 1 ? '1px solid rgba(255, 255, 255, 0.03)' : 'none' }}
-                >
-                  <span className="text-[10px] font-mono text-gray-600 flex-shrink-0 w-16">
-                    {event.time}
-                  </span>
-                  <span
-                    className="text-xs font-mono"
-                    style={{
-                      color: event.type === 'creator' ? '#42c7e6'
-                        : event.type === 'opponent' ? '#ed7f2f'
-                        : event.type === 'system' ? '#22c55e'
-                        : '#9ca3af',
-                    }}
-                  >
-                    {event.message}
-                  </span>
-                </div>
-              ))}
+        {/* ===== BATTLE LOG (On-Chain Events) ===== */}
+        <div
+          className="rounded-xl p-6 mb-8"
+          style={{
+            background: 'linear-gradient(135deg, rgba(10, 10, 10, 0.95), rgba(1, 1, 1, 0.98))',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+          }}
+        >
+          <h3 className="text-xs font-bold tracking-widest mb-4" style={{ color: '#ed7f2f' }}>
+            BATTLE LOG
+          </h3>
+          {eventsLoading ? (
+            <div className="flex items-center gap-2 py-4">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-500" />
+              <span className="text-xs font-mono text-gray-600">LOADING ON-CHAIN EVENTS...</span>
             </div>
-          </div>
-        )}
+          ) : battleEvents.length === 0 ? (
+            <p className="text-xs font-mono text-gray-600 py-4">NO EVENTS RECORDED YET</p>
+          ) : (
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {battleEvents.map((event, i) => {
+                const time = new Date(event.timestamp * 1000);
+                const timeStr = `${time.getHours().toString().padStart(2, '0')}:${time.getMinutes().toString().padStart(2, '0')}:${time.getSeconds().toString().padStart(2, '0')}`;
+                return (
+                  <div
+                    key={`${event.txHash}-${i}`}
+                    className="flex items-start gap-3 py-1.5"
+                    style={{ borderBottom: i < battleEvents.length - 1 ? '1px solid rgba(255, 255, 255, 0.03)' : 'none' }}
+                  >
+                    <span className="text-[10px] font-mono text-gray-600 flex-shrink-0 w-16">
+                      {timeStr}
+                    </span>
+                    <span
+                      className="text-xs font-mono flex-1"
+                      style={{
+                        color: event.type === 'creator' ? '#42c7e6'
+                          : event.type === 'opponent' ? '#ed7f2f'
+                          : event.type === 'system' ? '#22c55e'
+                          : '#9ca3af',
+                      }}
+                    >
+                      {event.message}
+                    </span>
+                    <a
+                      href={getExplorerUrl(event.txHash, 'tx')}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-shrink-0 p-1 rounded hover:bg-white/10 transition-colors"
+                      title="View transaction"
+                    >
+                      <ExternalLink className="h-3 w-3 text-gray-600" />
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {/* ===== BOTTOM INFO GRID ===== */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -721,6 +676,16 @@ export default function BattleDetail() {
           </p>
         </div>
       </div>
+
+      {/* Join Battle Modal */}
+      {battleId !== undefined && (
+        <JoinBattleModal
+          isOpen={showJoinModal}
+          onClose={() => setShowJoinModal(false)}
+          battleId={battleId}
+          vaultType={vaultType}
+        />
+      )}
     </div>
   );
 }
