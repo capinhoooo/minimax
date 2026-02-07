@@ -1,15 +1,24 @@
-import { useAccount, useConnect, useDisconnect, useBalance } from 'wagmi';
-import { useState } from 'react';
+import { useAccount, useDisconnect, useBalance } from 'wagmi';
+import { useState, useEffect } from 'react';
 import { Wallet, ChevronDown, LogOut, Copy, ExternalLink } from 'lucide-react';
 import { formatAddress, formatTokenAmount, getExplorerUrl, copyToClipboard } from '../../lib/utils';
+import { useWalletModal } from '../../context/WalletModalContext';
 
 export default function ConnectButton() {
   const { address, isConnected, chain } = useAccount();
-  const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const { data: balance } = useBalance({ address });
+  const { open: openWalletModal } = useWalletModal();
   const [showDropdown, setShowDropdown] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowDropdown(false);
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, []);
 
   const handleCopy = async () => {
     if (address) {
@@ -21,42 +30,17 @@ export default function ConnectButton() {
 
   if (!isConnected) {
     return (
-      <div className="relative">
-        <button
-          onClick={() => setShowDropdown(!showDropdown)}
-          disabled={isPending}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Wallet className="h-4 w-4" />
-          {isPending ? 'Connecting...' : 'Connect Wallet'}
-        </button>
-
-        {showDropdown && (
-          <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setShowDropdown(false)}
-            />
-            <div className="absolute right-0 mt-2 w-56 rounded-xl bg-background-secondary border border-border shadow-xl z-50">
-              <div className="p-2">
-                {connectors.map((connector) => (
-                  <button
-                    key={connector.id}
-                    onClick={() => {
-                      connect({ connector });
-                      setShowDropdown(false);
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-white/5 transition-colors"
-                  >
-                    <Wallet className="h-5 w-5 text-accent-blue" />
-                    <span className="font-medium">{connector.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+      <button
+        onClick={openWalletModal}
+        className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-xs tracking-wider transition-all hover:opacity-90"
+        style={{
+          background: 'linear-gradient(135deg, rgba(66, 199, 230, 0.15), rgba(14, 77, 157, 0.15))',
+          border: '1px solid rgba(66, 199, 230, 0.3)',
+          color: '#42c7e6',
+        }}
+      >
+        <span className="hidden sm:inline">CONNECT WALLET</span>
+      </button>
     );
   }
 
@@ -64,11 +48,15 @@ export default function ConnectButton() {
     <div className="relative">
       <button
         onClick={() => setShowDropdown(!showDropdown)}
-        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-background-secondary border border-border hover:border-accent-blue/50 transition-colors"
+        className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-xs tracking-wider transition-all"
+        style={{
+          background: 'rgba(10, 10, 10, 0.8)',
+          border: '1px solid rgba(34, 197, 94, 0.3)',
+          color: '#22c55e',
+        }}
       >
-        <div className="w-2 h-2 rounded-full bg-accent-green" />
-        <span className="font-medium">{formatAddress(address || '')}</span>
-        <ChevronDown className="h-4 w-4 text-gray-400" />
+        <span className="hidden sm:inline font-mono">{formatAddress(address || '')}</span>
+        <ChevronDown className="h-3.5 w-3.5 text-gray-500" />
       </button>
 
       {showDropdown && (
@@ -77,22 +65,35 @@ export default function ConnectButton() {
             className="fixed inset-0 z-40"
             onClick={() => setShowDropdown(false)}
           />
-          <div className="absolute right-0 mt-2 w-72 rounded-xl bg-background-secondary border border-border shadow-xl z-50">
-            <div className="p-4 border-b border-border">
+          <div
+            className="absolute right-0 mt-2 w-72 rounded-xl shadow-xl z-50"
+            style={{
+              background: 'linear-gradient(180deg, #111111 0%, #0a0a0a 100%)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+            }}
+          >
+            <div className="p-4 border-b border-white/5">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-400">Connected</span>
-                <span className="text-xs px-2 py-1 rounded-full bg-accent-blue/20 text-accent-blue">
+                <span className="text-[10px] font-mono text-gray-500 tracking-widest">CONNECTED</span>
+                <span
+                  className="text-[10px] font-mono px-2 py-0.5 rounded-full tracking-wider"
+                  style={{
+                    background: 'rgba(66, 199, 230, 0.1)',
+                    color: '#42c7e6',
+                    border: '1px solid rgba(66, 199, 230, 0.2)',
+                  }}
+                >
                   {chain?.name || 'Unknown'}
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-sm">{formatAddress(address || '', 6)}</span>
+                <span className="font-mono text-sm text-white">{formatAddress(address || '', 6)}</span>
                 <button
                   onClick={handleCopy}
                   className="p-1 rounded hover:bg-white/10 transition-colors"
                   title="Copy address"
                 >
-                  <Copy className="h-4 w-4 text-gray-400" />
+                  <Copy className="h-3.5 w-3.5 text-gray-500" />
                 </button>
                 <a
                   href={getExplorerUrl(address || '', 'address', chain?.id)}
@@ -101,18 +102,18 @@ export default function ConnectButton() {
                   className="p-1 rounded hover:bg-white/10 transition-colors"
                   title="View on explorer"
                 >
-                  <ExternalLink className="h-4 w-4 text-gray-400" />
+                  <ExternalLink className="h-3.5 w-3.5 text-gray-500" />
                 </a>
               </div>
               {copied && (
-                <span className="text-xs text-accent-green">Copied!</span>
+                <span className="text-[10px] font-mono text-green-400 tracking-wider">COPIED!</span>
               )}
             </div>
 
             {balance && (
-              <div className="p-4 border-b border-border">
-                <span className="text-sm text-gray-400">Balance</span>
-                <p className="font-medium">
+              <div className="p-4 border-b border-white/5">
+                <span className="text-[10px] font-mono text-gray-500 tracking-widest">BALANCE</span>
+                <p className="font-mono text-sm text-white mt-1">
                   {formatTokenAmount(balance.value, balance.decimals)} {balance.symbol}
                 </p>
               </div>
@@ -124,10 +125,11 @@ export default function ConnectButton() {
                   disconnect();
                   setShowDropdown(false);
                 }}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-accent-red hover:bg-accent-red/10 transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-red-500/10"
+                style={{ color: '#ef4444' }}
               >
-                <LogOut className="h-5 w-5" />
-                <span className="font-medium">Disconnect</span>
+                <LogOut className="h-4 w-4" />
+                <span className="font-mono text-xs font-bold tracking-wider">DISCONNECT</span>
               </button>
             </div>
           </div>

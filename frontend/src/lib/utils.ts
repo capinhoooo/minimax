@@ -132,12 +132,20 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 // Get explorer URL
 export function getExplorerUrl(hash: string, type: 'tx' | 'address' = 'tx', chainId = 11155111): string {
   const explorers: Record<number, string> = {
+    // Mainnets
     1: 'https://etherscan.io',
-    11155111: 'https://sepolia.etherscan.io',
     8453: 'https://basescan.org',
     42161: 'https://arbiscan.io',
     137: 'https://polygonscan.com',
     10: 'https://optimistic.etherscan.io',
+    // Testnets
+    11155111: 'https://sepolia.etherscan.io',
+    84532: 'https://sepolia.basescan.org',
+    421614: 'https://sepolia.arbiscan.io',
+    11155420: 'https://sepolia-optimism.etherscan.io',
+    80002: 'https://amoy.polygonscan.com',
+    43113: 'https://testnet.snowtrace.io',
+    59141: 'https://sepolia.lineascan.build',
   };
 
   const baseUrl = explorers[chainId] || explorers[11155111];
