@@ -93,7 +93,7 @@ export function useTimeRemaining(battleId: bigint | undefined, vaultType: VaultT
   });
 }
 
-/** Get current range performance (Range vault only) */
+/** Get current range performance (Range vault only) - auto-refreshes every 15s */
 export function useCurrentPerformance(battleId: bigint | undefined) {
   return useReadContract({
     address: CONTRACTS.RANGE_VAULT,
@@ -101,11 +101,11 @@ export function useCurrentPerformance(battleId: bigint | undefined) {
     functionName: 'getCurrentPerformance',
     args: battleId !== undefined ? [battleId] : undefined,
     chainId: sepolia.id,
-    query: { enabled: battleId !== undefined },
+    query: { enabled: battleId !== undefined, refetchInterval: 15000 },
   });
 }
 
-/** Get current fee performance (Fee vault only) */
+/** Get current fee performance (Fee vault only) - auto-refreshes every 15s */
 export function useCurrentFeePerformance(battleId: bigint | undefined) {
   return useReadContract({
     address: CONTRACTS.FEE_VAULT,
@@ -113,7 +113,7 @@ export function useCurrentFeePerformance(battleId: bigint | undefined) {
     functionName: 'getCurrentFeePerformance',
     args: battleId !== undefined ? [battleId] : undefined,
     chainId: sepolia.id,
-    query: { enabled: battleId !== undefined },
+    query: { enabled: battleId !== undefined, refetchInterval: 15000 },
   });
 }
 

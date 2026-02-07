@@ -1,4 +1,4 @@
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { sepolia } from 'wagmi/chains';
 import type { Address } from 'viem';
 import { CONTRACTS, ERC721_ABI } from '../lib/contracts';
@@ -25,6 +25,34 @@ export function usePositionTokenByIndex(owner: Address | undefined, index: bigin
     chainId: sepolia.id,
     query: { enabled: !!owner },
   });
+}
+
+/** Get all position token IDs owned by an address */
+export function useUserPositions(owner: Address | undefined, balance: bigint | undefined) {
+  const count = balance !== undefined ? Number(balance) : 0;
+  const indices = Array.from({ length: count }, (_, i) => BigInt(i));
+
+  const { data, isLoading } = useReadContracts({
+    contracts: indices.map((index) => ({
+      address: CONTRACTS.POSITION_MANAGER,
+      abi: ERC721_ABI,
+      functionName: 'tokenOfOwnerByIndex' as const,
+      args: [owner!, index] as const,
+      chainId: sepolia.id,
+    })),
+    query: { enabled: !!owner && count > 0 },
+  });
+
+  const tokenIds: bigint[] = [];
+  if (data) {
+    for (const r of data) {
+      if (r.status === 'success' && r.result !== undefined) {
+        tokenIds.push(r.result as bigint);
+      }
+    }
+  }
+
+  return { tokenIds, isLoading };
 }
 
 /** Check who the current approved address is for a token */
