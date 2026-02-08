@@ -5,6 +5,7 @@ import { logger } from './utils/logger.js';
 import { txCollector } from './utils/txCollector.js';
 import { runDemo } from './commands/demo.js';
 import { runAnalyze } from './commands/analyze.js';
+import { startServer } from './server.js';
 
 async function main() {
   console.log(`
@@ -92,6 +93,28 @@ async function main() {
         await runDemo(agent);
         break;
 
+      case 'serve': {
+        const port = parseInt(process.env.API_PORT || '3001');
+        startServer(agent, port);
+        // Also query initial LI.FI routes for API exposure
+        try {
+          const lifi = agent.getLiFi();
+          const routes = await lifi.getSwapRoutes(
+            8453, 1,
+            '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+            '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+            '50000000',
+            agent.getAddress()
+          );
+          agent.setLastRoutes(routes);
+        } catch {
+          logger.warn('Initial LI.FI route query failed (will retry in strategy loop)');
+        }
+        // Start strategy loop (runs alongside server)
+        await agent.startMonitoring();
+        break;
+      }
+
       case 'routes': {
         // Quick LI.FI route check (mainnet chain IDs for real data)
         const lifi = agent.getLiFi();
@@ -129,6 +152,7 @@ async function main() {
 
 \x1b[36mCore Commands:\x1b[0m
   monitor              Start autonomous MONITOR->DECIDE->ACT loop (default)
+  serve                Start API server (port 3001) + strategy loop
   status               Print agent status and vault overview
   settle [id] [type]   Settle a specific battle or run strategy cycle
   battles [type]       List active battles (type: range|fee)
