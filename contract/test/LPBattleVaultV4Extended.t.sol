@@ -48,7 +48,7 @@ contract LPBattleVaultV4ExtendedTest is LPBattleVaultV4Test {
 
         vm.startPrank(owner);
 
-        // Setup additional positions for fuzz testing
+        // Setup additional positions for fuzz testing (range vault - with hook)
         mockPositionManager.setPositionData(
             DAVE_TOKEN_ID,
             dave,
@@ -61,6 +61,8 @@ contract LPBattleVaultV4ExtendedTest is LPBattleVaultV4Test {
             400 * 1e6,
             900 * 1e6
         );
+        mockPositionManager.setPositionHook(DAVE_TOKEN_ID, address(mockHook));
+        mockPositionManager.setFeesToCollect(DAVE_TOKEN_ID, 400 * 1e6, 900 * 1e6);
 
         mockPositionManager.setPositionData(
             EVE_TOKEN_ID,
@@ -74,6 +76,8 @@ contract LPBattleVaultV4ExtendedTest is LPBattleVaultV4Test {
             350 * 1e6,
             850 * 1e6
         );
+        mockPositionManager.setPositionHook(EVE_TOKEN_ID, address(mockHook));
+        mockPositionManager.setFeesToCollect(EVE_TOKEN_ID, 350 * 1e6, 850 * 1e6);
 
         vm.stopPrank();
     }
@@ -156,11 +160,11 @@ contract LPBattleVaultV4ExtendedTest is LPBattleVaultV4Test {
 
     /// @notice Test creating maximum allowed battles
     function testEdgeCase_MultipleBattlesFromSameUser() public {
-        // Setup additional positions for dave
+        // Setup additional positions for dave (use IDs that don't conflict with fee vault IDs)
         uint256[] memory tokenIds = new uint256[](3);
-        tokenIds[0] = 2001;
-        tokenIds[1] = 2002;
-        tokenIds[2] = 2003;
+        tokenIds[0] = 5001;
+        tokenIds[1] = 5002;
+        tokenIds[2] = 5003;
 
         vm.startPrank(owner);
         for (uint256 i = 0; i < tokenIds.length; i++) {
@@ -176,6 +180,8 @@ contract LPBattleVaultV4ExtendedTest is LPBattleVaultV4Test {
                 uint128(400 * 1e6),
                 uint128(900 * 1e6)
             );
+            mockPositionManager.setPositionHook(tokenIds[i], address(mockHook));
+            mockPositionManager.setFeesToCollect(tokenIds[i], 400 * 1e6, 900 * 1e6);
         }
         vm.stopPrank();
 
@@ -302,7 +308,7 @@ contract LPBattleVaultV4ExtendedTest is LPBattleVaultV4Test {
 
     // ============ FEE BATTLE EXTENDED TESTS ============
 
-    /// @notice Fuzz test fee battle with various fee growth amounts
+    /// @notice Fuzz test fee battle with various fee collection amounts
     function testFuzz_FeeBattleFeeGrowth(uint128 aliceFee0, uint128 aliceFee1, uint128 bobFee0, uint128 bobFee1) public {
         // Bound fees to reasonable values
         aliceFee0 = uint128(bound(aliceFee0, 500 * 1e6, 10000 * 1e6));
@@ -311,14 +317,14 @@ contract LPBattleVaultV4ExtendedTest is LPBattleVaultV4Test {
         bobFee1 = uint128(bound(bobFee1, 800 * 1e6, 20000 * 1e6));
 
         vm.prank(alice);
-        uint256 battleId = feeVault.createBattle(ALICE_TOKEN_ID, TEST_DURATION);
+        uint256 battleId = feeVault.createBattle(ALICE_FEE_TOKEN_ID, TEST_DURATION);
 
         vm.prank(bob);
-        feeVault.joinBattle(battleId, BOB_TOKEN_ID);
+        feeVault.joinBattle(battleId, BOB_FEE_TOKEN_ID);
 
-        // Update fees after battle starts
-        mockPositionManager.updateFees(ALICE_TOKEN_ID, aliceFee0, aliceFee1);
-        mockPositionManager.updateFees(BOB_TOKEN_ID, bobFee0, bobFee1);
+        // Update fees to collect after battle starts
+        mockPositionManager.updateFees(ALICE_FEE_TOKEN_ID, aliceFee0, aliceFee1);
+        mockPositionManager.updateFees(BOB_FEE_TOKEN_ID, bobFee0, bobFee1);
 
         vm.warp(block.timestamp + TEST_DURATION + 1);
 
@@ -332,11 +338,10 @@ contract LPBattleVaultV4ExtendedTest is LPBattleVaultV4Test {
 
     /// @notice Test fee battle tie scenario - same fee GROWTH results in creator win
     function testFeeBattle_TieGoesToCreator() public {
-        // First, set up positions with IDENTICAL starting fees
+        // First, set up fee vault positions with IDENTICAL starting fees
         vm.startPrank(owner);
-        // Set Alice's position with specific starting fees
         mockPositionManager.setPositionData(
-            ALICE_TOKEN_ID,
+            ALICE_FEE_TOKEN_ID,
             alice,
             Currency.wrap(WETH),
             Currency.wrap(USDC),
@@ -344,12 +349,13 @@ contract LPBattleVaultV4ExtendedTest is LPBattleVaultV4Test {
             -1000,
             1000,
             1000000000000000000,
-            500 * 1e6,   // Same starting fee0 as we'll use for growth
-            1000 * 1e6   // Same starting fee1
+            500 * 1e6,
+            1000 * 1e6
         );
-        // Set Bob's position with IDENTICAL starting fees and liquidity
+        mockPositionManager.setFeesToCollect(ALICE_FEE_TOKEN_ID, 600 * 1e6, 1200 * 1e6);
+
         mockPositionManager.setPositionData(
-            BOB_TOKEN_ID,
+            BOB_FEE_TOKEN_ID,
             bob,
             Currency.wrap(WETH),
             Currency.wrap(USDC),
@@ -357,21 +363,21 @@ contract LPBattleVaultV4ExtendedTest is LPBattleVaultV4Test {
             -1000,
             1000,
             1000000000000000000,
-            500 * 1e6,   // Same starting fee0
-            1000 * 1e6   // Same starting fee1
+            500 * 1e6,
+            1000 * 1e6
         );
+        mockPositionManager.setFeesToCollect(BOB_FEE_TOKEN_ID, 600 * 1e6, 1200 * 1e6);
         vm.stopPrank();
 
         vm.prank(alice);
-        uint256 battleId = feeVault.createBattle(ALICE_TOKEN_ID, TEST_DURATION);
+        uint256 battleId = feeVault.createBattle(ALICE_FEE_TOKEN_ID, TEST_DURATION);
 
         vm.prank(bob);
-        feeVault.joinBattle(battleId, BOB_TOKEN_ID);
+        feeVault.joinBattle(battleId, BOB_FEE_TOKEN_ID);
 
-        // Set identical fee growth (add same amount to starting fees)
-        // Both grow by 100 fee0 and 200 fee1
-        mockPositionManager.updateFees(ALICE_TOKEN_ID, 600 * 1e6, 1200 * 1e6);
-        mockPositionManager.updateFees(BOB_TOKEN_ID, 600 * 1e6, 1200 * 1e6);
+        // Set identical fee growth for collection
+        mockPositionManager.updateFees(ALICE_FEE_TOKEN_ID, 600 * 1e6, 1200 * 1e6);
+        mockPositionManager.updateFees(BOB_FEE_TOKEN_ID, 600 * 1e6, 1200 * 1e6);
 
         vm.warp(block.timestamp + TEST_DURATION + 1);
 
@@ -379,7 +385,7 @@ contract LPBattleVaultV4ExtendedTest is LPBattleVaultV4Test {
         feeVault.resolveBattle(battleId);
 
         (,, address winner,,,,,,,,) = feeVault.getBattle(battleId);
-        // With identical fee rates, creator should win (tie-breaker: >= comparison)
+        // With identical fee rates (both 0 from mock), creator should win (tie-breaker: >= comparison)
         assertEq(winner, alice);
     }
 
@@ -409,6 +415,9 @@ contract LPBattleVaultV4ExtendedTest is LPBattleVaultV4Test {
                 uint128((500 + i * 100) * 1e6),
                 uint128((1000 + i * 100) * 1e6)
             );
+            mockPositionManager.setPositionHook(aliceTokens[i], address(mockHook));
+            mockPositionManager.setFeesToCollect(aliceTokens[i], (500 + i * 100) * 1e6, (1000 + i * 100) * 1e6);
+
             mockPositionManager.setPositionData(
                 bobTokens[i],
                 bob,
@@ -421,6 +430,8 @@ contract LPBattleVaultV4ExtendedTest is LPBattleVaultV4Test {
                 uint128((500 + i * 100) * 1e6),
                 uint128((1000 + i * 100) * 1e6)
             );
+            mockPositionManager.setPositionHook(bobTokens[i], address(mockHook));
+            mockPositionManager.setFeesToCollect(bobTokens[i], (500 + i * 100) * 1e6, (1000 + i * 100) * 1e6);
         }
         vm.stopPrank();
 
@@ -606,6 +617,8 @@ contract LPBattleVaultV4ExtendedTest is LPBattleVaultV4Test {
                 uint128(500 * 1e6),
                 uint128(1000 * 1e6)
             );
+            mockPositionManager.setPositionHook(tokenIds[i], address(mockHook));
+            mockPositionManager.setFeesToCollect(tokenIds[i], 500 * 1e6, 1000 * 1e6);
         }
         vm.stopPrank();
 
@@ -671,7 +684,7 @@ contract BattleInvariantHandler is Test {
 
         uint256 tokenId = 10000 + createdBattles.length;
 
-        // Setup position
+        // Setup position (no hook needed for invariant tests since vault has no hook set)
         positionManager.setPositionData(
             tokenId,
             actor,
@@ -684,6 +697,7 @@ contract BattleInvariantHandler is Test {
             500 * 1e6,
             1000 * 1e6
         );
+        positionManager.setFeesToCollect(tokenId, 500 * 1e6, 1000 * 1e6);
 
         vm.prank(actor);
         try vault.createBattle(tokenId, duration) returns (uint256 battleId) {
