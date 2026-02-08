@@ -246,8 +246,6 @@ export default function Leaderboard() {
               boxShadow: '0 0 30px rgba(237, 127, 47, 0.1)',
             }}
           >
-    
-
             {/* Table Header */}
             <div
               className="grid px-4 py-3"

@@ -1,5 +1,5 @@
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { Trophy, Zap, ShieldOff } from 'lucide-react';
+import { Trophy } from 'lucide-react';
 import { formatAddress } from '../../lib/utils';
 import type { VaultType } from '../../types';
 
@@ -59,10 +59,6 @@ export default function PerformanceChart({ perfData, vaultType, creatorAddress, 
     { name: 'Opponent', value: opponentPct || 0.5, color: OPPONENT_COLOR },
   ];
 
-  // Outer ring for in-range status
-  const creatorRangeAngle = perfData.creatorInRange ? 180 : 0;
-  const opponentRangeAngle = perfData.opponentInRange ? 180 : 0;
-
   return (
     <div
       className="rounded-xl p-6 mb-8 overflow-hidden"
@@ -94,7 +90,6 @@ export default function PerformanceChart({ perfData, vaultType, creatorAddress, 
               boxShadow: isLeaderCreator ? `0 0 15px ${CREATOR_GLOW}` : 'none',
             }}
           >
-            <div className="w-2 h-2 rounded-full" style={{ background: CREATOR_COLOR }} />
             <span className="text-[10px] font-mono font-bold tracking-wider" style={{ color: CREATOR_COLOR }}>
               CREATOR
             </span>
@@ -111,11 +106,6 @@ export default function PerformanceChart({ perfData, vaultType, creatorAddress, 
               border: `1px solid ${perfData.creatorInRange ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
             }}
           >
-            {perfData.creatorInRange ? (
-              <Zap className="w-3 h-3" style={{ color: '#22c55e' }} />
-            ) : (
-              <ShieldOff className="w-3 h-3" style={{ color: '#ef4444' }} />
-            )}
             <span
               className="text-[9px] font-mono font-bold tracking-wider"
               style={{ color: perfData.creatorInRange ? '#22c55e' : '#ef4444' }}
@@ -213,7 +203,6 @@ export default function PerformanceChart({ perfData, vaultType, creatorAddress, 
               boxShadow: isLeaderOpponent ? `0 0 15px ${OPPONENT_GLOW}` : 'none',
             }}
           >
-            <div className="w-2 h-2 rounded-full" style={{ background: OPPONENT_COLOR }} />
             <span className="text-[10px] font-mono font-bold tracking-wider" style={{ color: OPPONENT_COLOR }}>
               OPPONENT
             </span>
@@ -230,11 +219,6 @@ export default function PerformanceChart({ perfData, vaultType, creatorAddress, 
               border: `1px solid ${perfData.opponentInRange ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
             }}
           >
-            {perfData.opponentInRange ? (
-              <Zap className="w-3 h-3" style={{ color: '#22c55e' }} />
-            ) : (
-              <ShieldOff className="w-3 h-3" style={{ color: '#ef4444' }} />
-            )}
             <span
               className="text-[9px] font-mono font-bold tracking-wider"
               style={{ color: perfData.opponentInRange ? '#22c55e' : '#ef4444' }}

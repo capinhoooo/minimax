@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Loader2, ArrowLeft, Shield, Swords, Clock, Trophy, ExternalLink } from 'lucide-react';
+import { Loader2, ArrowLeft, Swords, Clock, Trophy, ExternalLink } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import {
   useRangeBattle,
@@ -251,7 +251,6 @@ export default function BattleDetail() {
             }}
           >
             <div className="flex items-center gap-2 mb-4">
-              <Shield className="w-4 h-4" style={{ color: '#42c7e6' }} />
               <span className="text-[10px] font-mono tracking-widest text-gray-500">CREATOR</span>
               {isCreator && (
                 <span className="text-[9px] font-mono tracking-wider px-1.5 py-0.5 rounded" style={{ color: '#42c7e6', border: '1px solid rgba(66, 199, 230, 0.4)' }}>
@@ -309,7 +308,6 @@ export default function BattleDetail() {
           >
             {battle.opponent === zeroAddr ? (
               <div className="flex flex-col items-center justify-center h-full py-8">
-                <Swords className="w-8 h-8 text-gray-600 mb-4" />
                 <p className="text-lg font-bold text-gray-500 mb-2">AWAITING CHALLENGER</p>
                 <p className="text-xs font-mono text-gray-600 mb-6 text-center">
                   This battle is open for an opponent to join
@@ -331,7 +329,6 @@ export default function BattleDetail() {
             ) : (
               <>
                 <div className="flex items-center gap-2 mb-4">
-                  <Shield className="w-4 h-4" style={{ color: '#ed7f2f' }} />
                   <span className="text-[10px] font-mono tracking-widest text-gray-500">OPPONENT</span>
                   {isOpponent && (
                     <span className="text-[9px] font-mono tracking-wider px-1.5 py-0.5 rounded" style={{ color: '#ed7f2f', border: '1px solid rgba(237, 127, 47, 0.4)' }}>
@@ -445,7 +442,6 @@ export default function BattleDetail() {
             {/* Leader indicator */}
             {perfData.leader && perfData.leader !== zeroAddr && (
               <div className="flex items-center justify-center gap-2 mt-5 pt-4" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                <Trophy className="w-3.5 h-3.5" style={{ color: '#22c55e' }} />
                 <span className="text-xs font-mono tracking-wider" style={{ color: '#22c55e' }}>
                   LEADER: {formatAddress(perfData.leader, 6)}
                   {perfData.leader.toLowerCase() === address?.toLowerCase() && ' (YOU)'}
