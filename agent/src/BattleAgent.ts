@@ -12,6 +12,10 @@ import {
 import { privateKeyToAccount } from 'viem/accounts';
 import { config } from './config.js';
 import { logger } from './utils/logger.js';
+import { txCollector } from './utils/txCollector.js';
+import { PoolAnalyzer, type BattleAnalysis } from './analyzers/PoolAnalyzer.js';
+import { CrossChainEntryAgent, type BattleEntryIntent } from './integrations/CrossChainEntryAgent.js';
+import { LiFiIntegration } from './integrations/LiFiIntegration.js';
 
 // Import ABIs
 import RangeVaultABI from './abis/LPBattleVaultV4.json' assert { type: 'json' };
@@ -39,11 +43,26 @@ export interface BattlePerformance {
   currentLeader: Address;
 }
 
+// ============ Strategy Action Types ============
+
+interface AgentAction {
+  type: 'resolve' | 'update_status' | 'analyze' | 'cross_chain_entry';
+  priority: number; // higher = more urgent
+  battleId?: bigint;
+  vaultType?: 'range' | 'fee';
+  reasoning: string;
+  data?: Record<string, unknown>;
+}
+
 export class BattleAgent {
   private publicClient: PublicClient;
   private walletClient: WalletClient;
   private account: ReturnType<typeof privateKeyToAccount>;
   private isRunning: boolean = false;
+  private poolAnalyzer: PoolAnalyzer;
+  private crossChainAgent: CrossChainEntryAgent;
+  private lifi: LiFiIntegration;
+  private cycleCount: number = 0;
 
   constructor() {
     this.account = privateKeyToAccount(config.privateKey);
@@ -59,15 +78,35 @@ export class BattleAgent {
       transport: http(config.rpcUrl),
     });
 
+    this.poolAnalyzer = new PoolAnalyzer(this.publicClient);
+    this.crossChainAgent = new CrossChainEntryAgent();
+    this.lifi = new LiFiIntegration();
+
     logger.info(`Agent initialized with address: ${this.account.address}`);
   }
 
-  // Get agent's wallet address
+  // ============ Getters ============
+
   getAddress(): Address {
     return this.account.address;
   }
 
-  // Check agent's ETH balance
+  getPublicClient(): PublicClient {
+    return this.publicClient;
+  }
+
+  getPoolAnalyzer(): PoolAnalyzer {
+    return this.poolAnalyzer;
+  }
+
+  getCrossChainAgent(): CrossChainEntryAgent {
+    return this.crossChainAgent;
+  }
+
+  getLiFi(): LiFiIntegration {
+    return this.lifi;
+  }
+
   async getBalance(): Promise<string> {
     const balance = await this.publicClient.getBalance({
       address: this.account.address,
@@ -75,7 +114,8 @@ export class BattleAgent {
     return formatEther(balance);
   }
 
-  // Get all active battles from Range Vault
+  // ============ Contract Read Methods ============
+
   async getActiveBattles(contractType: 'range' | 'fee' = 'range'): Promise<bigint[]> {
     const address = contractType === 'range' ? config.rangeVaultAddress : config.feeVaultAddress;
     const abi = contractType === 'range' ? RangeVaultABI : FeeVaultABI;
@@ -86,7 +126,6 @@ export class BattleAgent {
         abi,
         functionName: 'getActiveBattles',
       }) as bigint[];
-
       return result;
     } catch (error) {
       logger.error(`Failed to get active battles from ${contractType} vault`, error);
@@ -94,7 +133,6 @@ export class BattleAgent {
     }
   }
 
-  // Get battles ready to resolve
   async getBattlesReadyToResolve(contractType: 'range' | 'fee' = 'range'): Promise<bigint[]> {
     const activeBattles = await this.getActiveBattles(contractType);
     const readyBattles: bigint[] = [];
@@ -105,11 +143,9 @@ export class BattleAgent {
         readyBattles.push(battleId);
       }
     }
-
     return readyBattles;
   }
 
-  // Get battle details
   async getBattle(battleId: bigint, contractType: 'range' | 'fee' = 'range'): Promise<BattleInfo | null> {
     const address = contractType === 'range' ? config.rangeVaultAddress : config.feeVaultAddress;
     const abi = contractType === 'range' ? RangeVaultABI : FeeVaultABI;
@@ -141,7 +177,6 @@ export class BattleAgent {
     }
   }
 
-  // Get battle status
   async getBattleStatus(battleId: bigint, contractType: 'range' | 'fee' = 'range'): Promise<string> {
     const address = contractType === 'range' ? config.rangeVaultAddress : config.feeVaultAddress;
     const abi = contractType === 'range' ? RangeVaultABI : FeeVaultABI;
@@ -153,7 +188,6 @@ export class BattleAgent {
         functionName: 'getBattleStatus',
         args: [battleId],
       }) as string;
-
       return result;
     } catch (error) {
       logger.error(`Failed to get battle status for ${battleId}`, error);
@@ -161,7 +195,6 @@ export class BattleAgent {
     }
   }
 
-  // Get time remaining for a battle
   async getTimeRemaining(battleId: bigint, contractType: 'range' | 'fee' = 'range'): Promise<bigint> {
     const address = contractType === 'range' ? config.rangeVaultAddress : config.feeVaultAddress;
     const abi = contractType === 'range' ? RangeVaultABI : FeeVaultABI;
@@ -173,7 +206,6 @@ export class BattleAgent {
         functionName: 'getTimeRemaining',
         args: [battleId],
       }) as bigint;
-
       return result;
     } catch (error) {
       logger.error(`Failed to get time remaining for battle ${battleId}`, error);
@@ -181,12 +213,259 @@ export class BattleAgent {
     }
   }
 
-  // Settle a battle
+  // ============ STRATEGY LOOP: MONITOR ============
+
+  /**
+   * Scan all vaults, analyze battles, detect opportunities
+   */
+  async monitor(): Promise<{
+    rangeAnalyses: BattleAnalysis[];
+    feeAnalyses: BattleAnalysis[];
+    pendingBattles: { range: bigint[]; fee: bigint[] };
+  }> {
+    logger.info('[MONITOR] Scanning Uniswap V4 battle vaults...');
+
+    // Get active battles from both vaults
+    const [rangeActive, feeActive] = await Promise.all([
+      this.getActiveBattles('range'),
+      this.getActiveBattles('fee'),
+    ]);
+
+    logger.info(`[MONITOR] Range Vault: ${rangeActive.length} active | Fee Vault: ${feeActive.length} active`);
+
+    // Analyze each battle
+    const rangeAnalyses: BattleAnalysis[] = [];
+    for (const id of rangeActive) {
+      const analysis = await this.poolAnalyzer.analyzeRangeBattle(id);
+      if (analysis) {
+        rangeAnalyses.push(analysis);
+        this.poolAnalyzer.printBattleAnalysis(analysis);
+      }
+    }
+
+    const feeAnalyses: BattleAnalysis[] = [];
+    for (const id of feeActive) {
+      const analysis = await this.poolAnalyzer.analyzeFeeBattle(id);
+      if (analysis) {
+        feeAnalyses.push(analysis);
+        this.poolAnalyzer.printBattleAnalysis(analysis);
+      }
+    }
+
+    // Get pending battles (joinable)
+    const pendingBattles = await this.poolAnalyzer.getPendingBattles();
+    if (pendingBattles.range.length > 0 || pendingBattles.fee.length > 0) {
+      logger.info(`[MONITOR] Pending battles: ${pendingBattles.range.length} range, ${pendingBattles.fee.length} fee`);
+    }
+
+    return { rangeAnalyses, feeAnalyses, pendingBattles };
+  }
+
+  // ============ STRATEGY LOOP: DECIDE ============
+
+  /**
+   * Given monitor results, decide what actions to take
+   */
+  decide(
+    rangeAnalyses: BattleAnalysis[],
+    feeAnalyses: BattleAnalysis[],
+    pendingBattles: { range: bigint[]; fee: bigint[] }
+  ): AgentAction[] {
+    const actions: AgentAction[] = [];
+
+    logger.info('[DECIDE] Evaluating actions...');
+
+    // Priority 1: Resolve expired battles (earns resolver reward)
+    for (const analysis of [...rangeAnalyses, ...feeAnalyses]) {
+      if (analysis.status === 'ready_to_resolve') {
+        actions.push({
+          type: 'resolve',
+          priority: 100,
+          battleId: analysis.battleId,
+          vaultType: analysis.vaultType,
+          reasoning: `Battle #${analysis.battleId} expired on ${analysis.vaultType} vault - resolve for reward`,
+        });
+      }
+    }
+
+    // Priority 2: Update in-range status for ongoing range battles
+    for (const analysis of rangeAnalyses) {
+      if (analysis.status === 'ongoing') {
+        actions.push({
+          type: 'update_status',
+          priority: 50,
+          battleId: analysis.battleId,
+          vaultType: 'range',
+          reasoning: `Update in-range tracking for battle #${analysis.battleId}`,
+        });
+      }
+    }
+
+    // Priority 3: Analyze pending battles for cross-chain entry
+    for (const id of [...pendingBattles.range]) {
+      actions.push({
+        type: 'analyze',
+        priority: 30,
+        battleId: id,
+        vaultType: 'range',
+        reasoning: `Pending battle #${id} - evaluate for cross-chain entry opportunity`,
+      });
+    }
+    for (const id of [...pendingBattles.fee]) {
+      actions.push({
+        type: 'analyze',
+        priority: 30,
+        battleId: id,
+        vaultType: 'fee',
+        reasoning: `Pending battle #${id} - evaluate for cross-chain entry opportunity`,
+      });
+    }
+
+    // Sort by priority (highest first)
+    actions.sort((a, b) => b.priority - a.priority);
+
+    if (actions.length === 0) {
+      logger.info('[DECIDE] No actions needed this cycle');
+    } else {
+      logger.info(`[DECIDE] ${actions.length} actions planned:`);
+      actions.forEach((a, i) => {
+        logger.info(`  ${i + 1}. [${a.type.toUpperCase()}] ${a.reasoning}`);
+      });
+    }
+
+    return actions;
+  }
+
+  // ============ STRATEGY LOOP: ACT ============
+
+  /**
+   * Execute the decided actions
+   */
+  async act(actions: AgentAction[]): Promise<void> {
+    for (const action of actions) {
+      logger.info(`[ACT] Executing: ${action.type} - ${action.reasoning}`);
+
+      switch (action.type) {
+        case 'resolve':
+          if (action.battleId !== undefined && action.vaultType) {
+            await this.settleBattle(action.battleId, action.vaultType);
+          }
+          break;
+
+        case 'update_status':
+          if (action.battleId !== undefined) {
+            await this.updateBattleStatus(action.battleId);
+          }
+          break;
+
+        case 'analyze':
+          // Log the analysis for transparency
+          logger.logAction({
+            timestamp: new Date().toISOString(),
+            action: 'ANALYZE_OPPORTUNITY',
+            battleId: action.battleId?.toString(),
+            contractType: action.vaultType,
+            reasoning: action.reasoning,
+            status: 'success',
+          });
+          break;
+
+        case 'cross_chain_entry':
+          logger.logAction({
+            timestamp: new Date().toISOString(),
+            action: 'CROSS_CHAIN_ENTRY',
+            reasoning: action.reasoning,
+            inputs: action.data,
+            status: 'pending',
+          });
+          break;
+      }
+    }
+  }
+
+  // ============ Full Strategy Loop ============
+
+  /**
+   * Run one complete MONITOR -> DECIDE -> ACT cycle
+   */
+  async runStrategyCycle(): Promise<void> {
+    this.cycleCount++;
+    const C = { cyan: '\x1b[36m', reset: '\x1b[0m', gray: '\x1b[90m' };
+    console.log(`\n${C.cyan}${'='.repeat(70)}${C.reset}`);
+    console.log(`${C.cyan}  STRATEGY CYCLE #${this.cycleCount}  ${C.gray}${new Date().toISOString()}${C.reset}`);
+    console.log(`${C.cyan}${'='.repeat(70)}${C.reset}`);
+
+    try {
+      // MONITOR
+      const { rangeAnalyses, feeAnalyses, pendingBattles } = await this.monitor();
+
+      // DECIDE
+      const actions = this.decide(rangeAnalyses, feeAnalyses, pendingBattles);
+
+      // ACT
+      await this.act(actions);
+    } catch (error) {
+      logger.error('Strategy cycle error', error);
+    }
+  }
+
+  // ============ Cross-Chain Entry via LI.FI ============
+
+  /**
+   * Get cross-chain route options for entering a battle
+   */
+  async getCrossChainRoutes(intent: BattleEntryIntent) {
+    logger.info('[LIFI] Analyzing cross-chain routes...');
+
+    // Validate intent
+    const validation = await this.crossChainAgent.analyzeIntent(intent);
+    if (!validation.isValid) {
+      logger.error('[LIFI] Invalid intent:', validation.issues);
+      return null;
+    }
+
+    for (const rec of validation.recommendations) {
+      logger.info(`[LIFI] Recommendation: ${rec}`);
+    }
+
+    // Get route options
+    const routes = await this.crossChainAgent.getRouteOptions(intent);
+
+    if (routes.length === 0) {
+      logger.warn('[LIFI] No routes found');
+      return null;
+    }
+
+    logger.info(`[LIFI] Found ${routes.length} route options:`);
+    routes.forEach((r, i) => {
+      const tag = r.recommended ? ' (RECOMMENDED)' : '';
+      logger.info(`  ${i + 1}. ${r.method}${tag} - ${r.estimatedTime} - ${r.fees}`);
+    });
+
+    return routes;
+  }
+
+  /**
+   * Create and display execution plan for cross-chain entry
+   */
+  async planCrossChainEntry(intent: BattleEntryIntent) {
+    const routes = await this.getCrossChainRoutes(intent);
+    if (!routes || routes.length === 0) return null;
+
+    const recommended = routes.find(r => r.recommended) || routes[0];
+    const plan = await this.crossChainAgent.createExecutionPlan(intent, recommended);
+
+    this.crossChainAgent.printExecutionPlan(plan);
+
+    return plan;
+  }
+
+  // ============ Transaction Methods ============
+
   async settleBattle(battleId: bigint, contractType: 'range' | 'fee' = 'range'): Promise<Hash | null> {
     const address = contractType === 'range' ? config.rangeVaultAddress : config.feeVaultAddress;
     const abi = contractType === 'range' ? RangeVaultABI : FeeVaultABI;
 
-    // Get battle info for logging
     const battle = await this.getBattle(battleId, contractType);
     if (!battle) {
       logger.error(`Cannot settle - battle ${battleId} not found`);
@@ -210,7 +489,6 @@ export class BattleAgent {
     });
 
     try {
-      // Simulate first
       const { request } = await this.publicClient.simulateContract({
         account: this.account,
         address,
@@ -219,16 +497,26 @@ export class BattleAgent {
         args: [battleId],
       });
 
-      // Execute transaction
       const hash = await this.walletClient.writeContract(request);
-
       logger.info(`Transaction submitted: ${hash}`);
 
-      // Wait for confirmation
       const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
 
-      // Get updated battle info
       const updatedBattle = await this.getBattle(battleId, contractType);
+
+      // Record TX evidence
+      txCollector.record({
+        hash,
+        description: `Resolve battle #${battleId} (${contractType} vault)`,
+        chain: 'Sepolia',
+        chainId: 11155111,
+        type: 'resolve',
+        timestamp: Date.now(),
+        gasUsed: receipt.gasUsed.toString(),
+        blockNumber: Number(receipt.blockNumber),
+        from: this.account.address,
+        to: address,
+      });
 
       logger.logAction({
         timestamp: new Date().toISOString(),
@@ -264,7 +552,6 @@ export class BattleAgent {
     }
   }
 
-  // Update battle status (for range vault - updates in-range time)
   async updateBattleStatus(battleId: bigint): Promise<Hash | null> {
     try {
       const { request } = await this.publicClient.simulateContract({
@@ -277,6 +564,19 @@ export class BattleAgent {
 
       const hash = await this.walletClient.writeContract(request);
       const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
+
+      txCollector.record({
+        hash,
+        description: `Update in-range status for battle #${battleId}`,
+        chain: 'Sepolia',
+        chainId: 11155111,
+        type: 'update',
+        timestamp: Date.now(),
+        gasUsed: receipt.gasUsed.toString(),
+        blockNumber: Number(receipt.blockNumber),
+        from: this.account.address,
+        to: config.rangeVaultAddress,
+      });
 
       logger.logAction({
         timestamp: new Date().toISOString(),
@@ -296,101 +596,86 @@ export class BattleAgent {
     }
   }
 
-  // Main monitoring loop
+  // ============ Monitoring Loop ============
+
   async startMonitoring(): Promise<void> {
     this.isRunning = true;
-    logger.info('Starting battle monitoring...');
+    logger.info('Starting autonomous strategy loop...');
 
     const balance = await this.getBalance();
     logger.info(`Agent balance: ${balance} ETH`);
 
     while (this.isRunning) {
       try {
-        await this.checkAndSettleBattles();
+        await this.runStrategyCycle();
       } catch (error) {
-        logger.error('Error in monitoring loop', error);
+        logger.error('Error in strategy cycle', error);
       }
 
-      // Wait before next poll
       await this.sleep(config.pollIntervalMs);
     }
   }
 
-  // Stop monitoring
   stopMonitoring(): void {
     this.isRunning = false;
-    logger.info('Stopping battle monitoring...');
+    logger.info('Stopping agent...');
     logger.printSummary();
+    txCollector.printSummary();
   }
 
-  // Check and settle any ready battles
+  // Legacy method for backward compat
   async checkAndSettleBattles(): Promise<void> {
-    logger.debug('Checking for battles ready to settle...');
-
-    // Check Range Vault
-    const rangeActiveBattles = await this.getActiveBattles('range');
-    logger.debug(`Range Vault: ${rangeActiveBattles.length} active battles`);
-
-    for (const battleId of rangeActiveBattles) {
-      const status = await this.getBattleStatus(battleId, 'range');
-
-      if (status === 'ready_to_resolve') {
-        logger.info(`Found battle ${battleId} ready to resolve (Range Vault)`);
-        await this.settleBattle(battleId, 'range');
-      } else if (status === 'ongoing') {
-        // Update in-range tracking
-        const timeRemaining = await this.getTimeRemaining(battleId, 'range');
-        logger.debug(`Battle ${battleId}: ${status}, ${timeRemaining}s remaining`);
-      }
-    }
-
-    // Check Fee Vault
-    const feeActiveBattles = await this.getActiveBattles('fee');
-    logger.debug(`Fee Vault: ${feeActiveBattles.length} active battles`);
-
-    for (const battleId of feeActiveBattles) {
-      const status = await this.getBattleStatus(battleId, 'fee');
-
-      if (status === 'ready_to_resolve') {
-        logger.info(`Found battle ${battleId} ready to resolve (Fee Vault)`);
-        await this.settleBattle(battleId, 'fee');
-      }
-    }
+    await this.runStrategyCycle();
   }
 
-  // Print current status
+  // ============ Status Display ============
+
   async printStatus(): Promise<void> {
-    console.log('\n' + '='.repeat(60));
-    console.log('LP BATTLEVAULT AGENT STATUS');
-    console.log('='.repeat(60));
+    const C = {
+      reset: '\x1b[0m',
+      cyan: '\x1b[36m',
+      green: '\x1b[32m',
+      yellow: '\x1b[33m',
+      gray: '\x1b[90m',
+      blue: '\x1b[34m',
+    };
 
-    console.log(`\nAgent Address: ${this.account.address}`);
-    console.log(`Balance: ${await this.getBalance()} ETH`);
-    console.log(`Network: ${config.chain.name} (${config.chainId})`);
+    console.log(`\n${C.cyan}${'='.repeat(70)}${C.reset}`);
+    console.log(`${C.cyan}  LP BATTLEVAULT AUTONOMOUS AGENT${C.reset}`);
+    console.log(`${C.cyan}${'='.repeat(70)}${C.reset}`);
 
-    console.log('\n--- Range Vault ---');
-    console.log(`Address: ${config.rangeVaultAddress}`);
+    console.log(`\n  ${C.blue}Agent${C.reset}`);
+    console.log(`    Address:  ${this.account.address}`);
+    console.log(`    Balance:  ${await this.getBalance()} ETH`);
+    console.log(`    Network:  ${config.chain.name} (${config.chainId})`);
+    console.log(`    Cycles:   ${this.cycleCount}`);
+
+    console.log(`\n  ${C.blue}Range Vault${C.reset} ${C.gray}${config.rangeVaultAddress}${C.reset}`);
     const rangeActive = await this.getActiveBattles('range');
-    console.log(`Active Battles: ${rangeActive.length}`);
+    console.log(`    Active Battles: ${rangeActive.length}`);
     for (const id of rangeActive) {
       const battle = await this.getBattle(id, 'range');
       if (battle) {
-        console.log(`  Battle #${id}: ${battle.status} | Creator: ${battle.creator.slice(0, 10)}... | Value: ${formatUnits(battle.totalValueUSD, 8)} USD`);
+        console.log(`    Battle #${id}: ${battle.status} | Value: ${formatUnits(battle.totalValueUSD, 8)} USD`);
       }
     }
 
-    console.log('\n--- Fee Vault ---');
-    console.log(`Address: ${config.feeVaultAddress}`);
+    console.log(`\n  ${C.blue}Fee Vault${C.reset} ${C.gray}${config.feeVaultAddress}${C.reset}`);
     const feeActive = await this.getActiveBattles('fee');
-    console.log(`Active Battles: ${feeActive.length}`);
+    console.log(`    Active Battles: ${feeActive.length}`);
     for (const id of feeActive) {
       const battle = await this.getBattle(id, 'fee');
       if (battle) {
-        console.log(`  Battle #${id}: ${battle.status} | Creator: ${battle.creator.slice(0, 10)}...`);
+        console.log(`    Battle #${id}: ${battle.status} | Creator: ${battle.creator.slice(0, 12)}...`);
       }
     }
 
-    console.log('\n' + '='.repeat(60) + '\n');
+    // Show TX evidence if any
+    if (txCollector.count() > 0) {
+      txCollector.printSummary();
+    }
+
+    console.log(`\n${C.cyan}${'='.repeat(70)}${C.reset}\n`);
   }
 
   private sleep(ms: number): Promise<void> {
