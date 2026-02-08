@@ -1,6 +1,6 @@
 # LP BattleVault - Frontend
 
-React web application for creating, joining, and tracking Uniswap V4 LP position battles. Includes a live Agent dashboard that visualizes the autonomous agent's strategy loop.
+React web application for creating, joining, and tracking Uniswap V4 LP position battles. Includes a live Agent dashboard that visualizes the autonomous agent's strategy loop and LI.FI cross-chain routes.
 
 ## Pages
 
@@ -14,6 +14,7 @@ React web application for creating, joining, and tracking Uniswap V4 LP position
 | `/agent` | Agent Dashboard | Live strategy loop visualization with LI.FI routes |
 | `/leaderboard` | Leaderboard | Player rankings by win rate and total value |
 | `/swap` | Swap / Bridge | LI.FI widget for cross-chain swaps and bridges |
+| `/bridge` | Bridge | Alias for `/swap` (same LI.FI widget) |
 | `/profile` | Profile | User's battle history and LP positions |
 
 ## Agent Dashboard
@@ -39,41 +40,56 @@ Opens at `http://localhost:5173`.
 ## Build
 
 ```bash
-npm run build    # Output in dist/
-npm run preview  # Preview production build
+npm run build    # TypeScript check + Vite build, output in dist/
+npm run preview  # Preview production build locally
+npm run lint     # Run ESLint
 ```
 
 ## Tech Stack
 
-| Technology | Purpose |
-|-----------|---------|
-| React 19 | UI framework |
-| Vite 7 | Build tool and dev server |
-| Tailwind CSS 4 | Styling |
-| Wagmi 3 | Ethereum wallet connection |
-| Viem | Ethereum client library |
-| React Router 7 | Client-side routing |
-| React Query | Data fetching and caching (10s refetch) |
-| Recharts | Performance chart visualization |
-| LI.FI Widget | Cross-chain swap and bridge UI |
-| Lucide React | Icon library |
+| Technology | Version | Purpose |
+|-----------|---------|---------|
+| React | 19.2 | UI framework |
+| Vite | 7.2 | Build tool and dev server |
+| TypeScript | 5.9 | Type safety |
+| Tailwind CSS | 4.1 | Utility-first styling |
+| Wagmi | 3.4 | Ethereum wallet connection and contract hooks |
+| Viem | 2.x | Ethereum client library |
+| React Router | 7.13 | Client-side routing |
+| React Query | 5.90 | Data fetching and caching (10s refetch interval) |
+| Recharts | 3.7 | Performance chart visualization |
+| LI.FI Widget | 3.40 | Cross-chain swap and bridge UI (lazy-loaded, ~2MB) |
+| LI.FI SDK | 3.15 | Programmatic cross-chain route access |
+| Lucide React | 0.563 | Icon library |
+| BigMi React | 0.7 | Wallet integration UI components |
+| clsx + tailwind-merge | -- | Conditional class merging |
+| date-fns | 4.1 | Date formatting utilities |
 
 ## Contract Integration
 
 The frontend reads from deployed Sepolia contracts using Wagmi hooks:
 
 ```typescript
-// hooks/useBattleVault.ts
-useActiveBattles('range')        // Get active battle IDs
-useRangeBattle(battleId)         // Get battle details
-useCurrentPerformance(battleId)  // Live performance (15s refresh)
-useTimeRemaining(battleId)       // Time until expiry
+// hooks/useBattleVault.ts -- Read hooks
+useBattleCount('range')             // Total battle count
+useActiveBattles('range')           // Get active battle IDs
+usePendingBattles('range')          // Get battles waiting for opponent
+useRangeBattle(battleId)            // Get range battle details
+useFeeBattle(battleId)              // Get fee battle details
+useCurrentPerformance(battleId)     // Live performance (creator/opponent in-range time)
+useCurrentFeePerformance(battleId)  // Live fee accumulation comparison
+useTimeRemaining(battleId)          // Time until expiry
 
 // Write operations
-useCreateBattle('range')         // Deposit LP + create battle
-useJoinBattle('range')           // Join existing battle
-useResolveBattle('range')        // Settle expired battle
+useCreateBattle('range')            // Deposit LP + create battle
+useJoinBattle('range')              // Join existing battle
+useResolveBattle('range')           // Settle expired battle
 ```
+
+Additional hooks:
+- `usePositionManager.ts` -- Query LP position data from V4 PositionManager
+- `useBattleEvents.ts` -- Listen for on-chain battle events
+- `useCCTPBridge.ts` -- Circle CCTP bridge operations for USDC
 
 ## Design System
 
@@ -89,37 +105,54 @@ useResolveBattle('range')        // Settle expired battle
 ```
 frontend/src/
 ├── pages/
-│   ├── Home.tsx              # Landing page
-│   ├── Lobby.tsx             # Main dashboard
-│   ├── Agent.tsx             # Agent strategy loop dashboard
-│   ├── Leaderboard.tsx       # Player rankings
-│   ├── Profile.tsx           # User profile
-│   ├── Swap.tsx              # LI.FI swap widget
+│   ├── Home.tsx                 # Landing page
+│   ├── Lobby.tsx                # Main dashboard with stats
+│   ├── Agent.tsx                # Agent strategy loop dashboard
+│   ├── Leaderboard.tsx          # Player rankings
+│   ├── Profile.tsx              # User profile & history
+│   ├── Swap.tsx                 # LI.FI swap widget (lazy-loaded)
 │   └── Battle/
-│       ├── BattleArena.tsx   # All battles listing
-│       ├── BattleDetail.tsx  # Single battle view
-│       └── CreateBattle.tsx  # New battle creation
+│       ├── BattleArena.tsx      # All battles listing
+│       ├── BattleDetail.tsx     # Single battle view with performance chart
+│       └── CreateBattle.tsx     # New battle creation form
 ├── components/
 │   ├── layout/
-│   │   ├── Header.tsx        # Navigation bar
-│   │   └── Layout.tsx        # Page wrapper with footer
+│   │   ├── Header.tsx           # Navigation bar
+│   │   └── Layout.tsx           # Page wrapper with Outlet and footer
 │   ├── battle/
-│   │   ├── PerformanceChart.tsx  # Battle performance visualization
-│   │   └── JoinBattleModal.tsx   # Battle entry modal
-│   └── wallet/
-│       ├── ConnectButton.tsx     # Wallet connection
-│       └── WalletModal.tsx       # Wallet selection
+│   │   ├── PerformanceChart.tsx # Battle performance visualization (Recharts)
+│   │   └── JoinBattleModal.tsx  # Battle entry modal
+│   ├── wallet/
+│   │   ├── ConnectButton.tsx    # Wallet connection button
+│   │   └── WalletModal.tsx      # Wallet selection dialog
+│   └── CctpBridge.tsx           # USDC bridge component
 ├── hooks/
-│   ├── useBattleVault.ts     # Contract read/write hooks
-│   ├── usePositionManager.ts # LP position hooks
-│   └── useBattleEvents.ts   # Event listener hooks
+│   ├── useBattleVault.ts        # Contract read/write hooks (Range + Fee vaults)
+│   ├── usePositionManager.ts    # LP position queries
+│   ├── useBattleEvents.ts       # On-chain event listeners
+│   └── useCCTPBridge.ts         # CCTP bridge operations
 ├── lib/
-│   ├── contracts.ts          # ABIs and addresses
-│   └── utils.ts              # Formatting helpers
-└── config/
-    └── wagmi.ts              # Wagmi + chain configuration
+│   ├── contracts.ts             # ABIs, contract addresses, vault address resolver
+│   └── utils.ts                 # Formatting helpers (addresses, amounts, time)
+├── config/
+│   └── wagmi.ts                 # Wagmi config with Sepolia chain + RPC
+├── context/
+│   └── WalletModalContext.tsx   # Global wallet modal state (React Context)
+├── types/
+│   └── index.ts                 # TypeScript type definitions (VaultType, BattleStatus, etc.)
+├── assets/                      # Logo, SVG images
+├── shims/
+│   └── sui-jsonrpc.ts           # Sui RPC shim (for LI.FI Widget compatibility)
+├── App.tsx                      # Root component with routing and providers
+├── main.tsx                     # React entry point
+└── index.css                    # Global styles (Tailwind imports)
 ```
 
-## License
+## Environment Variables
 
-MIT
+Copy `.env.example` to `.env`:
+
+```env
+VITE_ALCHEMY_API_KEY=YOUR_ALCHEMY_KEY
+VITE_WALLETCONNECT_PROJECT_ID=YOUR_PROJECT_ID
+```
