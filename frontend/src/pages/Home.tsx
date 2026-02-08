@@ -330,17 +330,20 @@ export default function Home() {
               <div ref={feature3Ref}>
                 <div className="feature-content-card p-8 rounded-lg border border-gray-700/50 w-full">
                   <h3 className="text-2xl sm:text-3xl font-black text-[#42c7e6] italic mb-6 tracking-tight">
-                    WINNER TAKES ALL
+                    FEE BATTLE
                   </h3>
                   <p className="text-gray-400 font-mono text-sm leading-relaxed mb-4">
-                    To set up your Arena account, you'll need an Ethereum wallet. If the battle ends and your efficiency score exceeds your opponent's by 10%, you claim the accumulated pool fees from the battle duration.
+                    Two LPs enter, one walks away with all the fees. Both players lock their LP positions into the battle contract for a set duration. During the battle, both positions generate swap fees from real trading activity — but neither player can touch them until the battle ends.
+                  </p>
+                  <p className="text-gray-400 font-mono text-sm leading-relaxed mb-4">
+                    When the timer expires, the winner collects all swap fees earned by both positions. Your LP principal is always safe — both players get their liquidity back. You only risk the fees, never your capital.
                   </p>
                   <p className="text-gray-400 font-mono text-sm leading-relaxed">
-                    It's high stakes, high reward. Make sure you know your impermanent loss risk. To start an account, launch the{' '}
+                    Ready to put your LP skills to the test? Enter the{' '}
                     <Link to="/battle" className="text-[#42c7e6] underline decoration-dashed underline-offset-4 hover:text-[#5fd4f0]">
                       ARENA DAPP
-                    </Link>
-                    , select a pool, and click the Battle button in the upper right corner. Sign in and you're ready to go.
+                    </Link>{' '}
+                    and challenge an opponent.
                   </p>
                 </div>
               </div>
@@ -381,9 +384,9 @@ export default function Home() {
                 <img src={feesSvg} alt="Winner Takes All" className="max-h-[200px] w-auto" />
               </div>
               <div className="feature-content-card p-6 rounded-lg border border-gray-700/50">
-                <h3 className="text-xl font-black text-[#42c7e6] italic mb-4">WINNER TAKES ALL</h3>
+                <h3 className="text-xl font-black text-[#42c7e6] italic mb-4">FEE BATTLE</h3>
                 <p className="text-gray-400 font-mono text-sm leading-relaxed">
-                  High stakes, high reward. If your efficiency score exceeds your opponent's by 10%, you claim the accumulated pool fees.
+                  Both players lock their LP positions. The winner collects all swap fees earned by both positions. Your LP is always returned — you only risk the fees, never your capital.
                 </p>
               </div>
             </div>
