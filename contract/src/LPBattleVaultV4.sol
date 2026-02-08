@@ -16,6 +16,7 @@ import {IHooks} from "v4-core/interfaces/IHooks.sol";
 
 import {IPositionManager, AggregatorV3Interface} from "./interfaces/IShared.sol";
 import {PositionInfo} from "v4-periphery/src/libraries/PositionInfoLibrary.sol";
+import {Actions} from "v4-periphery/src/libraries/Actions.sol";
 import {PoolUtilsV4} from "./libraries/PoolUtilsV4.sol";
 import {TransferUtils} from "./libraries/TransferUtils.sol";
 import {StringUtils} from "./libraries/StringUtils.sol";
@@ -235,6 +236,9 @@ contract LPBattleVaultV4 is IERC721Receiver, Pausable, ReentrancyGuard {
         return IERC721Receiver.onERC721Received.selector;
     }
 
+    /// @notice Allow contract to receive native ETH from fee collection
+    receive() external payable {}
+
     // ============ Core Battle Functions ============
 
     /// @notice Create a new battle with a V4 LP position
@@ -381,7 +385,7 @@ contract LPBattleVaultV4 is IERC721Receiver, Pausable, ReentrancyGuard {
         battle.isResolved = true;
         battle.winner = winner;
 
-        // Unlock positions
+        // Step 1: Unlock positions FIRST (required before fee collection due to hook)
         if (address(battleHook) != address(0)) {
             battleHook.unlockPosition(
                 battle.creatorPoolKey,
@@ -395,14 +399,38 @@ contract LPBattleVaultV4 is IERC721Receiver, Pausable, ReentrancyGuard {
             );
         }
 
-        // Transfer NFTs back to original owners
+        // Step 2: Collect fees from both positions
+        (uint256 creatorFee0, uint256 creatorFee1) = _collectFees(
+            battle.creatorTokenId,
+            battle.creatorPoolKey
+        );
+        (uint256 opponentFee0, uint256 opponentFee1) = _collectFees(
+            battle.opponentTokenId,
+            battle.opponentPoolKey
+        );
+
+        // Step 3: Distribute fees to winner and resolver
+        address resolver = msg.sender;
+        uint256 totalResolverReward;
+
+        if (creatorFee0 > 0) {
+            totalResolverReward += _distributeFees(battle.creatorPoolKey.currency0, creatorFee0, winner, resolver);
+        }
+        if (creatorFee1 > 0) {
+            totalResolverReward += _distributeFees(battle.creatorPoolKey.currency1, creatorFee1, winner, resolver);
+        }
+        if (opponentFee0 > 0) {
+            totalResolverReward += _distributeFees(battle.opponentPoolKey.currency0, opponentFee0, winner, resolver);
+        }
+        if (opponentFee1 > 0) {
+            totalResolverReward += _distributeFees(battle.opponentPoolKey.currency1, opponentFee1, winner, resolver);
+        }
+
+        // Step 4: Return NFTs to original owners
         positionManager.safeTransferFrom(address(this), battle.creator, battle.creatorTokenId);
         positionManager.safeTransferFrom(address(this), battle.opponent, battle.opponentTokenId);
 
-        // Note: Fee collection and distribution would be handled here
-        // For V4, this requires interacting with the PoolManager's unlock mechanism
-
-        emit BattleResolved(battleId, winner, msg.sender, 0);
+        emit BattleResolved(battleId, winner, resolver, totalResolverReward);
     }
 
     /// @notice Update in-range tracking for a battle
@@ -571,6 +599,61 @@ contract LPBattleVaultV4 is IERC721Receiver, Pausable, ReentrancyGuard {
         } catch {
             return 18;
         }
+    }
+
+    // ============ Fee Collection & Distribution ============
+
+    /// @notice Collect accumulated fees from a V4 position via DECREASE_LIQUIDITY(0)
+    /// @param tokenId The position NFT token ID
+    /// @param poolKey The pool key for the position
+    /// @return collected0 Amount of currency0 fees collected
+    /// @return collected1 Amount of currency1 fees collected
+    function _collectFees(
+        uint256 tokenId,
+        PoolKey memory poolKey
+    ) internal returns (uint256 collected0, uint256 collected1) {
+        // Record balances before collection
+        uint256 balance0Before = poolKey.currency0.balanceOfSelf();
+        uint256 balance1Before = poolKey.currency1.balanceOfSelf();
+
+        // Encode action batch: DECREASE_LIQUIDITY(0) + CLOSE_CURRENCY x2
+        bytes memory actions = abi.encodePacked(
+            uint8(Actions.DECREASE_LIQUIDITY),
+            uint8(Actions.CLOSE_CURRENCY),
+            uint8(Actions.CLOSE_CURRENCY)
+        );
+
+        bytes[] memory params = new bytes[](3);
+        params[0] = abi.encode(tokenId, uint256(0), uint128(0), uint128(0), bytes(""));
+        params[1] = abi.encode(poolKey.currency0);
+        params[2] = abi.encode(poolKey.currency1);
+
+        positionManager.modifyLiquidities(abi.encode(actions, params), block.timestamp);
+
+        // Calculate collected amounts via balance difference
+        collected0 = poolKey.currency0.balanceOfSelf() - balance0Before;
+        collected1 = poolKey.currency1.balanceOfSelf() - balance1Before;
+    }
+
+    /// @notice Distribute collected fees: 1% to resolver, 99% to winner
+    /// @param currency The currency to distribute
+    /// @param totalAmount Total amount collected
+    /// @param winner The battle winner
+    /// @param resolver The resolver (msg.sender)
+    /// @return resolverReward Amount sent to resolver
+    function _distributeFees(
+        Currency currency,
+        uint256 totalAmount,
+        address winner,
+        address resolver
+    ) internal returns (uint256 resolverReward) {
+        if (totalAmount == 0) return 0;
+
+        resolverReward = PoolUtilsV4.calculateResolverReward(totalAmount, RESOLVER_REWARD_BPS);
+        uint256 winnerAmount = totalAmount - resolverReward;
+
+        TransferUtils.safeTransferCurrency(currency, resolver, resolverReward);
+        TransferUtils.safeTransferCurrency(currency, winner, winnerAmount);
     }
 
     // ============ View Functions ============

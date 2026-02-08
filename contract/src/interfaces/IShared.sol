@@ -38,6 +38,7 @@ interface IPositionManager {
     function getPositionLiquidity(uint256 tokenId) external view returns (uint128 liquidity);
     function ownerOf(uint256 tokenId) external view returns (address);
     function safeTransferFrom(address from, address to, uint256 tokenId) external;
+    function modifyLiquidities(bytes calldata unlockData, uint256 deadline) external payable;
 }
 
 // ============ Battle Vault Interface ============

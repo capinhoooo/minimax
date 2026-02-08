@@ -122,17 +122,14 @@ contract Setup is Script {
             vault.setPriceFeed(WBTC, BTC_USD_FEED);
         }
 
-        // DAI/USD
         if (DAI != address(0)) {
             vault.setPriceFeed(DAI, DAI_USD_FEED);
         }
 
-        // LINK/USD
         if (LINK != address(0)) {
             vault.setPriceFeed(LINK, LINK_USD_FEED);
         }
 
-        // USDC/USD
         if (USDC != address(0)) {
             vault.setPriceFeed(USDC, USDC_USD_FEED);
         }
@@ -264,7 +261,7 @@ contract ConfigureDeployment is Script {
 
         // Configure Range Vault if provided
         if (rangeVaultAddress != address(0)) {
-            LPBattleVaultV4 rangeVault = LPBattleVaultV4(rangeVaultAddress);
+            LPBattleVaultV4 rangeVault = LPBattleVaultV4(payable(rangeVaultAddress));
 
             rangeVault.setPriceFeed(address(0), ETH_USD_FEED);
             rangeVault.setPriceFeed(WBTC, BTC_USD_FEED);
@@ -280,7 +277,7 @@ contract ConfigureDeployment is Script {
 
         // Configure Fee Vault if provided
         if (feeVaultAddress != address(0)) {
-            LPFeeBattleV4 feeVault = LPFeeBattleV4(feeVaultAddress);
+            LPFeeBattleV4 feeVault = LPFeeBattleV4(payable(feeVaultAddress));
 
             feeVault.setPriceFeed(address(0), ETH_USD_FEED);
             feeVault.setPriceFeed(WBTC, BTC_USD_FEED);
