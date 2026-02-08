@@ -17,6 +17,7 @@ import CreateBattle from './pages/Battle/CreateBattle';
 import Profile from './pages/Profile';
 import Leaderboard from './pages/Leaderboard';
 import Lobby from './pages/Lobby';
+import Agent from './pages/Agent';
 
 // Lazy-loaded (LI.FI widget is large ~2MB)
 const Swap = lazy(() => import('./pages/Swap'));
@@ -48,6 +49,7 @@ function App() {
               <Route path="swap" element={<Suspense fallback={<div className="flex items-center justify-center min-h-screen"><span className="text-sm font-mono text-gray-500 tracking-wider">LOADING SWAP ENGINE...</span></div>}><Swap /></Suspense>} />
               <Route path="bridge" element={<Suspense fallback={<div className="flex items-center justify-center min-h-screen"><span className="text-sm font-mono text-gray-500 tracking-wider">LOADING BRIDGE...</span></div>}><Swap /></Suspense>} />
               <Route path="lobby" element={<Lobby />} />
+              <Route path="agent" element={<Agent />} />
               <Route path="profile" element={<Profile />} />
             </Route>
           </Routes>
