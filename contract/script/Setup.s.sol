@@ -3,6 +3,8 @@ pragma solidity ^0.8.24;
 
 import {Script, console} from "forge-std/Script.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
+import {Hooks} from "v4-core/libraries/Hooks.sol";
+import {HookMiner} from "v4-periphery/src/utils/HookMiner.sol";
 import {LPBattleVaultV4} from "../src/LPBattleVaultV4.sol";
 import {LPFeeBattleV4} from "../src/LPFeeBattleV4.sol";
 import {BattleVaultHook} from "../src/hooks/BattleVaultHook.sol";
@@ -46,7 +48,18 @@ contract Setup is Script {
         feeVault = new LPFeeBattleV4(poolManager);
         console.log("2. LPFeeBattleV4 (Fee Battle) deployed at:", address(feeVault));
 
-        hook = new BattleVaultHook(
+        // Mine hook address with correct permission flags via CREATE2
+        uint160 flags = uint160(
+            Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG | Hooks.AFTER_SWAP_FLAG
+        );
+        (, bytes32 salt) = HookMiner.find(
+            0x4e59b44847b379578588920cA78FbF26c0B4956C, // CREATE2 Deployer Proxy
+            flags,
+            type(BattleVaultHook).creationCode,
+            abi.encode(IPoolManager(poolManager), address(rangeVault))
+        );
+
+        hook = new BattleVaultHook{salt: salt}(
             IPoolManager(poolManager),
             address(rangeVault)
         );
@@ -169,7 +182,18 @@ contract DeployRangeVault is Script {
         LPBattleVaultV4 vault = new LPBattleVaultV4(poolManager);
         console.log("LPBattleVaultV4 deployed at:", address(vault));
 
-        BattleVaultHook hook = new BattleVaultHook(
+        // Mine hook address with correct permission flags via CREATE2
+        uint160 flags = uint160(
+            Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG | Hooks.AFTER_SWAP_FLAG
+        );
+        (, bytes32 salt) = HookMiner.find(
+            0x4e59b44847b379578588920cA78FbF26c0B4956C,
+            flags,
+            type(BattleVaultHook).creationCode,
+            abi.encode(IPoolManager(poolManager), address(vault))
+        );
+
+        BattleVaultHook hook = new BattleVaultHook{salt: salt}(
             IPoolManager(poolManager),
             address(vault)
         );
