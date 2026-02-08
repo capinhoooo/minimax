@@ -99,6 +99,11 @@ class Logger {
     return this.actionLogs;
   }
 
+  // Get most recent logs (newest first)
+  getRecentLogs(limit: number = 50): AgentActionLog[] {
+    return this.actionLogs.slice(-limit).reverse();
+  }
+
   // Print summary of all actions
   printSummary() {
     const successful = this.actionLogs.filter(l => l.status === 'success').length;

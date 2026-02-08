@@ -45,7 +45,7 @@ export interface BattlePerformance {
 
 // ============ Strategy Action Types ============
 
-interface AgentAction {
+export interface AgentAction {
   type: 'resolve' | 'update_status' | 'analyze' | 'cross_chain_entry';
   priority: number; // higher = more urgent
   battleId?: bigint;
@@ -63,6 +63,14 @@ export class BattleAgent {
   private crossChainAgent: CrossChainEntryAgent;
   private lifi: LiFiIntegration;
   private cycleCount: number = 0;
+  private startedAt: number = Date.now();
+  private lastMonitorResult: {
+    rangeAnalyses: BattleAnalysis[];
+    feeAnalyses: BattleAnalysis[];
+    pendingBattles: { range: bigint[]; fee: bigint[] };
+  } | null = null;
+  private lastDecisions: AgentAction[] = [];
+  private lastRoutes: unknown[] = [];
 
   constructor() {
     this.account = privateKeyToAccount(config.privateKey);
@@ -397,10 +405,12 @@ export class BattleAgent {
 
     try {
       // MONITOR
-      const { rangeAnalyses, feeAnalyses, pendingBattles } = await this.monitor();
+      const monitorResult = await this.monitor();
+      this.lastMonitorResult = monitorResult;
 
       // DECIDE
-      const actions = this.decide(rangeAnalyses, feeAnalyses, pendingBattles);
+      const actions = this.decide(monitorResult.rangeAnalyses, monitorResult.feeAnalyses, monitorResult.pendingBattles);
+      this.lastDecisions = actions;
 
       // ACT
       await this.act(actions);
@@ -676,6 +686,36 @@ export class BattleAgent {
     }
 
     console.log(`\n${C.cyan}${'='.repeat(70)}${C.reset}\n`);
+  }
+
+  // ============ State Exposure (for API) ============
+
+  getCycleCount(): number {
+    return this.cycleCount;
+  }
+
+  getIsRunning(): boolean {
+    return this.isRunning;
+  }
+
+  getStartedAt(): number {
+    return this.startedAt;
+  }
+
+  getLastMonitorResult() {
+    return this.lastMonitorResult;
+  }
+
+  getLastDecisions(): AgentAction[] {
+    return this.lastDecisions;
+  }
+
+  getLastRoutes(): unknown[] {
+    return this.lastRoutes;
+  }
+
+  setLastRoutes(routes: unknown[]): void {
+    this.lastRoutes = routes;
   }
 
   private sleep(ms: number): Promise<void> {
