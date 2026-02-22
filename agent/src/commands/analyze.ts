@@ -1,7 +1,7 @@
 /**
  * Analyze Command
  *
- * Analyzes specific battles or all active battles across both vaults.
+ * Analyzes specific battles or all active battles in the BattleArena.
  */
 
 import { BattleAgent } from '../BattleAgent.js';
@@ -16,9 +16,9 @@ const C = {
   blue: '\x1b[34m',
 };
 
-export async function runAnalyze(agent: BattleAgent, battleIdArg?: string, vaultType?: string) {
+export async function runAnalyze(agent: BattleAgent, battleIdArg?: string) {
   console.log(`\n${C.cyan}${'='.repeat(70)}${C.reset}`);
-  console.log(`${C.cyan}  BATTLE ANALYZER - Uniswap V4 Pool Analysis${C.reset}`);
+  console.log(`${C.cyan}  BATTLE ANALYZER - Multi-DEX LP Battle Analysis${C.reset}`);
   console.log(`${C.cyan}${'='.repeat(70)}${C.reset}\n`);
 
   const analyzer = agent.getPoolAnalyzer();
@@ -26,13 +26,10 @@ export async function runAnalyze(agent: BattleAgent, battleIdArg?: string, vault
   if (battleIdArg) {
     // Analyze specific battle
     const battleId = BigInt(battleIdArg);
-    const vault = (vaultType || 'range') as 'range' | 'fee';
 
-    console.log(`${C.blue}Analyzing battle #${battleId} on ${vault} vault...${C.reset}\n`);
+    console.log(`${C.blue}Analyzing battle #${battleId}...${C.reset}\n`);
 
-    const analysis = vault === 'range'
-      ? await analyzer.analyzeRangeBattle(battleId)
-      : await analyzer.analyzeFeeBattle(battleId);
+    const analysis = await analyzer.analyzeBattle(battleId);
 
     if (analysis) {
       analyzer.printBattleAnalysis(analysis);
@@ -53,38 +50,30 @@ export async function runAnalyze(agent: BattleAgent, battleIdArg?: string, vault
     // Analyze all active battles
     console.log(`${C.blue}Analyzing all active battles...${C.reset}\n`);
 
-    const [rangeActive, feeActive] = await Promise.all([
-      agent.getActiveBattles('range'),
-      agent.getActiveBattles('fee'),
+    const [activeBattles, pendingBattles, expiredBattles] = await Promise.all([
+      agent.getActiveBattles(),
+      agent.getPendingBattles(),
+      agent.getExpiredBattles(),
     ]);
 
-    if (rangeActive.length === 0 && feeActive.length === 0) {
-      console.log(`  ${C.gray}No active battles found${C.reset}\n`);
+    if (activeBattles.length === 0 && pendingBattles.length === 0 && expiredBattles.length === 0) {
+      console.log(`  ${C.gray}No battles found${C.reset}\n`);
       return;
     }
 
-    if (rangeActive.length > 0) {
-      console.log(`${C.blue}Range Vault (${rangeActive.length} active):${C.reset}`);
-      for (const id of rangeActive) {
-        const analysis = await analyzer.analyzeRangeBattle(id);
-        if (analysis) analyzer.printBattleAnalysis(analysis);
-      }
-    }
+    const allBattleIds = [...activeBattles, ...expiredBattles];
 
-    if (feeActive.length > 0) {
-      console.log(`\n${C.blue}Fee Vault (${feeActive.length} active):${C.reset}`);
-      for (const id of feeActive) {
-        const analysis = await analyzer.analyzeFeeBattle(id);
+    if (allBattleIds.length > 0) {
+      console.log(`${C.blue}Active/Expired Battles (${allBattleIds.length}):${C.reset}`);
+      for (const id of allBattleIds) {
+        const analysis = await analyzer.analyzeBattle(id);
         if (analysis) analyzer.printBattleAnalysis(analysis);
       }
     }
 
     // Show pending battles
-    const pending = await analyzer.getPendingBattles();
-    if (pending.range.length > 0 || pending.fee.length > 0) {
-      console.log(`\n${C.green}Joinable Battles:${C.reset}`);
-      if (pending.range.length > 0) console.log(`  Range: ${pending.range.map(String).join(', ')}`);
-      if (pending.fee.length > 0) console.log(`  Fee: ${pending.fee.map(String).join(', ')}`);
+    if (pendingBattles.length > 0) {
+      console.log(`\n${C.green}Joinable Battles: ${pendingBattles.map(String).join(', ')}${C.reset}`);
     }
   }
 

@@ -35,10 +35,10 @@ function section(text: string) {
 }
 
 export async function runDemo(agent: BattleAgent) {
-  banner('LP BATTLEVAULT - AUTONOMOUS AGENT DEMO');
+  banner('MINIMAX LP BATTLEVAULT - AUTONOMOUS AGENT DEMO');
 
   console.log(`${C.gray}  This demo showcases the full agent strategy loop:${C.reset}`);
-  console.log(`${C.gray}  1. MONITOR - Scan Uniswap V4 battle vaults${C.reset}`);
+  console.log(`${C.gray}  1. MONITOR - Scan BattleArena on Arbitrum Sepolia${C.reset}`);
   console.log(`${C.gray}  2. DECIDE  - Evaluate actions (resolve, update, entry)${C.reset}`);
   console.log(`${C.gray}  3. ACT     - Execute decisions on-chain${C.reset}`);
   console.log(`${C.gray}  4. LI.FI   - Cross-chain route analysis${C.reset}`);
@@ -55,25 +55,24 @@ export async function runDemo(agent: BattleAgent) {
   // ============ Step 3: Cross-Chain Route Analysis via LI.FI ============
   section('STEP 3: Cross-Chain Route Analysis via LI.FI');
 
-  console.log(`${C.yellow}  Simulating cross-chain battle entry from Base → Ethereum...${C.reset}\n`);
+  console.log(`${C.yellow}  Simulating cross-chain battle entry from Base → Arbitrum...${C.reset}\n`);
   console.log(`${C.gray}  (Using mainnet chain IDs for real LI.FI route data)${C.reset}\n`);
 
   const intent = {
     userAddress: agent.getAddress(),
-    sourceChain: SUPPORTED_CHAINS.BASE,            // Base mainnet (8453) - LI.FI supported
-    sourceToken: TOKENS.USDC[SUPPORTED_CHAINS.BASE], // USDC on Base
-    amount: BigInt(50e6), // 50 USDC
+    sourceChain: SUPPORTED_CHAINS.BASE,
+    sourceToken: TOKENS.USDC[SUPPORTED_CHAINS.BASE],
+    amount: BigInt(50e6),
     targetPool: {
-      chainId: SUPPORTED_CHAINS.ETHEREUM,           // Ethereum mainnet (1) - LI.FI supported
-      token0: '0x0000000000000000000000000000000000000000', // ETH
-      token1: TOKENS.USDC[SUPPORTED_CHAINS.ETHEREUM],      // USDC on Ethereum
+      chainId: SUPPORTED_CHAINS.ARBITRUM,
+      token0: '0x0000000000000000000000000000000000000000',
+      token1: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', // USDC on Arbitrum
       tickLower: -887220,
       tickUpper: 887220,
     },
   };
 
   try {
-    // Analyze intent
     const validation = await agent.getCrossChainAgent().analyzeIntent(intent);
     console.log(`  Intent Valid: ${validation.isValid ? C.green + 'YES' : C.red + 'NO'}${C.reset}`);
     if (validation.recommendations.length > 0) {
@@ -81,7 +80,6 @@ export async function runDemo(agent: BattleAgent) {
       validation.recommendations.forEach(r => console.log(`    - ${r}`));
     }
 
-    // Get route options
     console.log(`\n${C.yellow}  Querying LI.FI for cross-chain routes...${C.reset}`);
     const routes = await agent.getCrossChainAgent().getRouteOptions(intent);
 
@@ -93,7 +91,6 @@ export async function runDemo(agent: BattleAgent) {
         console.log(`       Time: ${r.estimatedTime} | Fees: ${r.fees} | Steps: ${r.steps}`);
       });
 
-      // Create execution plan
       const recommended = routes.find(r => r.recommended) || routes[0];
       const plan = await agent.getCrossChainAgent().createExecutionPlan(intent, recommended);
       agent.getCrossChainAgent().printExecutionPlan(plan);
@@ -101,12 +98,11 @@ export async function runDemo(agent: BattleAgent) {
       console.log(`  ${C.yellow}No LI.FI routes available for testnet (expected - LI.FI primarily supports mainnet)${C.reset}`);
       console.log(`  ${C.gray}On mainnet, routes would be available for: Ethereum, Arbitrum, Base, Polygon, Optimism${C.reset}`);
 
-      // Show what the agent WOULD do on mainnet
       console.log(`\n  ${C.blue}Mainnet Route Preview:${C.reset}`);
       console.log(`    Source: USDC on Base (chain 8453)`);
-      console.log(`    Destination: ETH + USDC on Ethereum (chain 1)`);
+      console.log(`    Destination: ETH + USDC on Arbitrum (chain 42161)`);
       console.log(`    Method: LI.FI bridge + swap`);
-      console.log(`    Steps: Bridge USDC -> Swap 50% to ETH -> Add V4 Liquidity -> Enter Battle`);
+      console.log(`    Steps: Bridge USDC -> Swap 50% to ETH -> Add LP Liquidity -> Enter Battle`);
     }
   } catch (error) {
     console.log(`  ${C.yellow}LI.FI route query: ${error instanceof Error ? error.message : 'Service unavailable for testnets'}${C.reset}`);
@@ -116,7 +112,6 @@ export async function runDemo(agent: BattleAgent) {
   // ============ Step 4: Arc/CCTP Bridge Analysis ============
   section('STEP 4: CCTP Bridge Route (Alternative)');
 
-  const arc = agent.getCrossChainAgent();
   console.log(`  ${C.blue}Circle CCTP Bridge (for USDC transfers):${C.reset}`);
   console.log(`    Supported chains: Ethereum, Arbitrum, Base, Polygon, Optimism`);
   console.log(`    Method: Native USDC burn on source -> attestation -> mint on destination`);
@@ -131,19 +126,25 @@ export async function runDemo(agent: BattleAgent) {
   banner('DEMO COMPLETE');
 
   console.log(`  ${C.blue}What this agent does:${C.reset}`);
-  console.log(`    1. Monitors Uniswap V4 battle vaults (Range + Fee)`);
+  console.log(`    1. Monitors BattleArena on Arbitrum Sepolia (Uniswap V4 + Camelot)`);
   console.log(`    2. Analyzes battle state: in-range status, fee growth, time remaining`);
   console.log(`    3. Auto-resolves expired battles for resolver rewards`);
   console.log(`    4. Uses LI.FI SDK for cross-chain battle entry routing`);
   console.log(`    5. Supports CCTP bridging for native USDC transfers`);
   console.log(`    6. Transparent logging of all decisions and actions`);
 
-  console.log(`\n  ${C.blue}Sponsor Coverage:${C.reset}`);
-  console.log(`    ${C.green}Uniswap V4:${C.reset} Direct V4 pool interaction, LP battle management`);
-  console.log(`    ${C.green}LI.FI:${C.reset}       Cross-chain routing via SDK, MONITOR->DECIDE->ACT loop`);
+  console.log(`\n  ${C.blue}Architecture:${C.reset}`);
+  console.log(`    ${C.green}BattleArena:${C.reset}       Multi-DEX LP battle management (Solidity)`);
+  console.log(`    ${C.green}Scoring Engine:${C.reset}    Range & fee scoring via Stylus (Rust/WASM)`);
+  console.log(`    ${C.green}Leaderboard:${C.reset}       ELO ratings via Stylus (Rust/WASM)`);
+  console.log(`    ${C.green}DEX Adapters:${C.reset}      Uniswap V4 + Camelot position normalization`);
+  console.log(`    ${C.green}LI.FI:${C.reset}             Cross-chain routing via SDK`);
 
-  console.log(`\n  ${C.blue}Contracts (Sepolia):${C.reset}`);
-  console.log(`    Range Vault: 0xDC987dF013d655c8eEb89ACA2c14BdcFeEee850a`);
-  console.log(`    Fee Vault:   0xF09216A363FC5D88E899aa92239B2eeB1913913B`);
+  console.log(`\n  ${C.blue}Contracts (Arbitrum Sepolia):${C.reset}`);
+  console.log(`    BattleArena:     0x478505eb07B3C8943A642E51F066bcF8aC8ed51d`);
+  console.log(`    UniswapV4Adapter:0x244C49E7986feC5BaD7C567d588B9262eF5e0604`);
+  console.log(`    CamelotAdapter:  0x5442068A4Cd117F26047c89f0A87D635112c886E`);
+  console.log(`    ScoringEngine:   0xd34ffbe6d046cb1a3450768664caf97106d18204 (Stylus)`);
+  console.log(`    Leaderboard:     0x7feb2cf23797fd950380cd9ad4b7d4cad4b3c85b (Stylus)`);
   console.log();
 }

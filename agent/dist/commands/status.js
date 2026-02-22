@@ -2,8 +2,9 @@ import { BattleAgent } from '../BattleAgent.js';
 import { validateConfig } from '../config.js';
 import { logger } from '../utils/logger.js';
 import { formatUnits } from 'viem';
+import { statusName, battleTypeName, dexTypeName } from '../BattleAgent.js';
 async function main() {
-    console.log('LP BattleVault - Status Command\n');
+    console.log('Minimax LP BattleVault - Status Command\n');
     try {
         validateConfig();
         const agent = new BattleAgent();
@@ -14,52 +15,50 @@ async function main() {
         if (verbose) {
             // Print detailed battle information
             console.log('\n--- Detailed Battle Information ---\n');
-            // Range Vault battles
-            const rangeActive = await agent.getActiveBattles('range');
-            if (rangeActive.length > 0) {
-                console.log('Range Vault Battles:');
-                for (const id of rangeActive) {
-                    const battle = await agent.getBattle(id, 'range');
-                    const timeRemaining = await agent.getTimeRemaining(id, 'range');
+            const activeBattles = await agent.getActiveBattles();
+            const pendingBattles = await agent.getPendingBattles();
+            if (activeBattles.length > 0) {
+                console.log('Active Battles:');
+                for (const id of activeBattles) {
+                    const battle = await agent.getBattle(id);
                     if (battle) {
+                        const timeRemaining = agent.getTimeRemaining(battle);
                         console.log(`\n  Battle #${id}:`);
+                        console.log(`    Type:           ${battleTypeName(battle.battleType)}`);
                         console.log(`    Creator:        ${battle.creator}`);
+                        console.log(`    Creator DEX:    ${dexTypeName(battle.creatorDex)}`);
                         console.log(`    Opponent:       ${battle.opponent}`);
+                        console.log(`    Opponent DEX:   ${dexTypeName(battle.opponentDex)}`);
                         console.log(`    Creator Token:  ${battle.creatorTokenId}`);
                         console.log(`    Opponent Token: ${battle.opponentTokenId}`);
                         console.log(`    Start Time:     ${new Date(Number(battle.startTime) * 1000).toISOString()}`);
                         console.log(`    Duration:       ${battle.duration}s`);
                         console.log(`    Time Remaining: ${timeRemaining}s`);
-                        console.log(`    Total Value:    $${formatUnits(battle.totalValueUSD, 8)}`);
-                        console.log(`    Status:         ${battle.status}`);
-                        console.log(`    Resolved:       ${battle.isResolved}`);
+                        console.log(`    Creator Value:  $${formatUnits(battle.creatorValueUSD, 8)}`);
+                        console.log(`    Opponent Value: $${formatUnits(battle.opponentValueUSD, 8)}`);
+                        console.log(`    Status:         ${statusName(battle.status)}`);
                         if (battle.winner !== '0x0000000000000000000000000000000000000000') {
                             console.log(`    Winner:         ${battle.winner}`);
                         }
                     }
                 }
             }
-            // Fee Vault battles
-            const feeActive = await agent.getActiveBattles('fee');
-            if (feeActive.length > 0) {
-                console.log('\nFee Vault Battles:');
-                for (const id of feeActive) {
-                    const battle = await agent.getBattle(id, 'fee');
-                    const timeRemaining = await agent.getTimeRemaining(id, 'fee');
+            if (pendingBattles.length > 0) {
+                console.log('\nPending Battles:');
+                for (const id of pendingBattles) {
+                    const battle = await agent.getBattle(id);
                     if (battle) {
                         console.log(`\n  Battle #${id}:`);
+                        console.log(`    Type:           ${battleTypeName(battle.battleType)}`);
                         console.log(`    Creator:        ${battle.creator}`);
-                        console.log(`    Opponent:       ${battle.opponent}`);
-                        console.log(`    Start Time:     ${new Date(Number(battle.startTime) * 1000).toISOString()}`);
+                        console.log(`    Creator DEX:    ${dexTypeName(battle.creatorDex)}`);
                         console.log(`    Duration:       ${battle.duration}s`);
-                        console.log(`    Time Remaining: ${timeRemaining}s`);
-                        console.log(`    Status:         ${battle.status}`);
-                        console.log(`    Resolved:       ${battle.isResolved}`);
+                        console.log(`    Creator Value:  $${formatUnits(battle.creatorValueUSD, 8)}`);
                     }
                 }
             }
-            if (rangeActive.length === 0 && feeActive.length === 0) {
-                console.log('No active battles found.');
+            if (activeBattles.length === 0 && pendingBattles.length === 0) {
+                console.log('No active or pending battles found.');
             }
         }
     }
