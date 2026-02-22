@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Bot, Activity, Zap, Route, Shield, CheckCircle, AlertTriangle, Radio, ChevronRight, Loader2, WifiOff } from 'lucide-react';
+import { Bot, Activity, Zap, Route, Shield, CheckCircle, AlertTriangle, Radio, ChevronRight, Loader2 } from 'lucide-react';
 import { formatAddress } from '../lib/utils';
 
 // Types matching agent API responses
@@ -221,40 +221,187 @@ export default function Agent() {
     system: '#a855f7',
   };
 
-  // Disconnected state
-  if (connected === false) {
+  // Disconnected or loading state
+  if (connected === false || connected === null) {
     return (
       <div className="min-h-screen grid-bg">
         <div className="max-w-7xl mx-auto px-4 py-12">
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-4xl sm:text-5xl font-black tracking-tight">
+          <div className="flex items-center gap-3 mb-3">
+            <Bot className="h-8 w-8" style={{ color: '#a855f7' }} />
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight">
               <span className="gradient-text-magenta italic">AUTONOMOUS AGENT</span>
             </h1>
           </div>
-          <p className="text-xs sm:text-sm tracking-[0.3em] text-gray-500 mb-10 uppercase font-mono">
-            MONITOR &rarr; DECIDE &rarr; ACT &middot; LI.FI Cross-Chain
+          <p className="text-xs sm:text-sm tracking-[0.2em] text-gray-500 mb-12 uppercase font-mono">
+            MONITOR &rarr; DECIDE &rarr; ACT // STRATEGY LOOP // LI.FI CROSS-CHAIN
           </p>
 
+          {/* Agent Overview */}
           <div
-            className="rounded-lg p-12 flex flex-col items-center justify-center gap-4"
+            className="rounded-xl p-6 mb-8"
             style={{
-              background: 'rgba(10, 10, 10, 0.95)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
+              background: 'rgba(5, 5, 5, 0.95)',
+              border: '1px solid rgba(168, 85, 247, 0.3)',
+              boxShadow: '0 0 30px rgba(168, 85, 247, 0.1)',
             }}
           >
-            <WifiOff size={32} className="text-red-500 opacity-60" />
-            <h2 className="text-lg font-bold text-white">Agent Offline</h2>
-            <p className="text-sm font-mono text-gray-500 text-center max-w-md">
-              Cannot connect to the agent API server. Start the agent with:
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: connected === null ? '#eab308' : '#ef4444' }} />
+              <h3 className="text-xs font-mono font-bold tracking-widest" style={{ color: '#a855f7' }}>
+                {connected === null ? 'CONNECTING TO AGENT...' : 'AGENT SERVER OFFLINE'}
+              </h3>
+            </div>
+            <p className="text-sm font-mono text-gray-400 mb-4">
+              The autonomous agent monitors the BattleArena, auto-settles expired battles for resolver rewards, and provides advisory intelligence via REST API.
             </p>
             <code
-              className="text-sm font-mono px-4 py-2 rounded-lg"
+              className="block text-sm font-mono px-4 py-3 rounded-lg mb-4"
               style={{ background: 'rgba(66, 199, 230, 0.08)', color: '#42c7e6', border: '1px solid rgba(66, 199, 230, 0.2)' }}
             >
               cd agent && npx tsx src/index.ts serve
             </code>
-            <p className="text-xs font-mono text-gray-600 mt-2">
-              Retrying connection every 5 seconds...
+            <p className="text-[10px] font-mono text-gray-600">
+              {connected === null ? 'Attempting connection...' : 'Retrying every 5 seconds...'}
+            </p>
+          </div>
+
+          {/* Strategy Loop Explanation */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div
+              className="rounded-xl p-6"
+              style={{
+                background: 'rgba(5, 5, 5, 0.95)',
+                border: '1px solid rgba(66, 199, 230, 0.3)',
+              }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <Radio size={16} style={{ color: '#42c7e6' }} />
+                <h4 className="text-sm font-black tracking-wider" style={{ color: '#42c7e6' }}>MONITOR</h4>
+              </div>
+              <p className="text-xs font-mono text-gray-500">
+                Scans BattleArena every 30s for active, pending, and expired battles across V4 and Camelot pools.
+              </p>
+            </div>
+            <div
+              className="rounded-xl p-6"
+              style={{
+                background: 'rgba(5, 5, 5, 0.95)',
+                border: '1px solid rgba(237, 127, 47, 0.3)',
+              }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <Activity size={16} style={{ color: '#ed7f2f' }} />
+                <h4 className="text-sm font-black tracking-wider" style={{ color: '#ed7f2f' }}>DECIDE</h4>
+              </div>
+              <p className="text-xs font-mono text-gray-500">
+                Prioritizes actions: resolve expired battles for rewards, analyze active battles, compute win probabilities.
+              </p>
+            </div>
+            <div
+              className="rounded-xl p-6"
+              style={{
+                background: 'rgba(5, 5, 5, 0.95)',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+              }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <Zap size={16} style={{ color: '#22c55e' }} />
+                <h4 className="text-sm font-black tracking-wider" style={{ color: '#22c55e' }}>ACT</h4>
+              </div>
+              <p className="text-xs font-mono text-gray-500">
+                Executes on-chain: settles battles, updates status, queries LI.FI for cross-chain bridge routes.
+              </p>
+            </div>
+          </div>
+
+          {/* Features Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div
+              className="rounded-xl p-6"
+              style={{
+                background: 'rgba(5, 5, 5, 0.95)',
+                border: '1px solid rgba(66, 199, 230, 0.2)',
+              }}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-1 h-6 rounded-full" style={{ background: '#42c7e6' }} />
+                <h4 className="text-xs font-bold tracking-widest text-white">UNISWAP V4 INTEGRATION</h4>
+              </div>
+              <ul className="space-y-2">
+                {[
+                  'Direct V4 PoolManager state via extsload',
+                  'LP position battle management',
+                  'Win probability computation',
+                  'Auto-resolve expired battles for 1% reward',
+                ].map((item, i) => (
+                  <li key={i} className="flex items-center gap-2">
+                    <CheckCircle size={10} style={{ color: '#42c7e6' }} />
+                    <span className="text-[10px] font-mono text-gray-400">{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div
+              className="rounded-xl p-6"
+              style={{
+                background: 'rgba(5, 5, 5, 0.95)',
+                border: '1px solid rgba(237, 127, 47, 0.2)',
+              }}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-1 h-6 rounded-full" style={{ background: '#ed7f2f' }} />
+                <h4 className="text-xs font-bold tracking-widest text-white">LI.FI CROSS-CHAIN</h4>
+              </div>
+              <ul className="space-y-2">
+                {[
+                  'Multi-bridge route optimization (9+ providers)',
+                  'Cross-chain battle entry planning',
+                  'Live SDK route querying',
+                  'Automated bridge + swap + LP + battle flow',
+                ].map((item, i) => (
+                  <li key={i} className="flex items-center gap-2">
+                    <CheckCircle size={10} style={{ color: '#ed7f2f' }} />
+                    <span className="text-[10px] font-mono text-gray-400">{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* REST API Endpoints */}
+          <div
+            className="rounded-xl p-6 mt-6"
+            style={{
+              background: 'rgba(5, 5, 5, 0.95)',
+              border: '1px solid rgba(168, 85, 247, 0.2)',
+            }}
+          >
+            <h4 className="text-xs font-bold tracking-widest mb-4" style={{ color: '#a855f7' }}>
+              ADVISORY REST API (PORT 3001)
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {[
+                ['GET /api/status', 'Agent address, balance, uptime'],
+                ['GET /api/battles', 'Active + pending battle data'],
+                ['GET /api/battles/:id', 'Single battle + pool analysis'],
+                ['GET /api/battles/:id/probability', 'Win probability calc'],
+                ['GET /api/recommendations', 'Scored pending battles'],
+                ['GET /api/pools', 'V4 + Camelot pool state'],
+                ['GET /api/players/:address', 'Player stats from Stylus'],
+                ['GET /api/leaderboard', 'All players ranked by ELO'],
+              ].map(([endpoint, desc], i) => (
+                <div key={i} className="flex items-start gap-2 px-2 py-1.5">
+                  <code className="text-[9px] font-mono flex-shrink-0" style={{ color: '#42c7e6' }}>{endpoint}</code>
+                  <span className="text-[9px] font-mono text-gray-600">{desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Terminal Status */}
+          <div className="mt-16 text-center">
+            <p className="text-xs font-mono text-gray-600 tracking-wider">
+              TERMINAL STATUS: <span style={{ color: connected === null ? '#eab308' : '#ef4444' }}>{connected === null ? 'CONNECTING' : 'OFFLINE'}</span> // AUTONOMOUS AGENT // ARBITRUM_SEPOLIA
             </p>
           </div>
         </div>
@@ -448,11 +595,11 @@ export default function Agent() {
                   </div>
                   <div className="flex gap-4">
                     <div>
-                      <div className="text-lg font-black text-white">{vaults?.range.active ?? 0}</div>
+                      <div className="text-lg font-black text-white">{vaults?.range?.active ?? 0}</div>
                       <div className="text-[9px] font-mono text-gray-500">ACTIVE</div>
                     </div>
                     <div>
-                      <div className="text-lg font-black" style={{ color: '#42c7e6' }}>{vaults?.range.pending ?? 0}</div>
+                      <div className="text-lg font-black" style={{ color: '#42c7e6' }}>{vaults?.range?.pending ?? 0}</div>
                       <div className="text-[9px] font-mono text-gray-500">PENDING</div>
                     </div>
                   </div>
@@ -468,11 +615,11 @@ export default function Agent() {
                   </div>
                   <div className="flex gap-4">
                     <div>
-                      <div className="text-lg font-black text-white">{vaults?.fee.active ?? 0}</div>
+                      <div className="text-lg font-black text-white">{vaults?.fee?.active ?? 0}</div>
                       <div className="text-[9px] font-mono text-gray-500">ACTIVE</div>
                     </div>
                     <div>
-                      <div className="text-lg font-black" style={{ color: '#ed7f2f' }}>{vaults?.fee.pending ?? 0}</div>
+                      <div className="text-lg font-black" style={{ color: '#ed7f2f' }}>{vaults?.fee?.pending ?? 0}</div>
                       <div className="text-[9px] font-mono text-gray-500">PENDING</div>
                     </div>
                   </div>
