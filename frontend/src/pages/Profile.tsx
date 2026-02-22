@@ -4,68 +4,50 @@ import { useAccount } from 'wagmi';
 import { Loader2, Shield } from 'lucide-react';
 import { formatAddress, formatUSD } from '../lib/utils';
 import {
-  useUserBattles,
-  useRangeBattles,
-  useFeeBattles,
+  usePlayerBattles,
+  useBattles,
 } from '../hooks/useBattleVault';
 import { useUserPositions } from '../hooks/usePositionManager';
+import { usePlayerStats } from '../hooks/useStylus';
+import { BattleStatus, BattleType } from '../types';
+import type { Battle } from '../types';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 export default function Profile() {
   const { address, isConnected } = useAccount();
 
-  // User battles from both vaults
-  const { data: userRangeBattles } = useUserBattles(address, 'range');
-  const { data: userFeeBattles } = useUserBattles(address, 'fee');
+  // User battles from BattleArena
+  const { data: userBattleIds } = usePlayerBattles(address);
 
-  const userRangeIds = useMemo(() => {
-    if (!userRangeBattles) return [] as bigint[];
-    const [ids] = userRangeBattles as [bigint[], boolean[]];
-    return ids;
-  }, [userRangeBattles]);
+  const userIds = useMemo(() => {
+    if (!userBattleIds) return [] as bigint[];
+    return userBattleIds as bigint[];
+  }, [userBattleIds]);
 
-  const userFeeIds = useMemo(() => {
-    if (!userFeeBattles) return [] as bigint[];
-    const [ids] = userFeeBattles as [bigint[], boolean[]];
-    return ids;
-  }, [userFeeBattles]);
-
-  const { data: userRangeDetails, isLoading: loadingRange } = useRangeBattles(userRangeIds);
-  const { data: userFeeDetails, isLoading: loadingFee } = useFeeBattles(userFeeIds);
+  const { data: userBattleDetails, isLoading: loadingBattles } = useBattles(userIds);
 
   // LP positions
   const { tokenIds: userPositions, isLoading: loadingPositions } = useUserPositions(address);
 
-  const isLoading = loadingRange || loadingFee;
+  // Stylus Leaderboard: ELO rating
+  const { data: stylusStats } = usePlayerStats(address);
+  const playerElo = stylusStats ? Number((stylusStats as readonly bigint[])[0]) : null;
+
+  const isLoading = loadingBattles;
 
   // Compute stats
   const userStats = useMemo(() => {
     let wins = 0, losses = 0, total = 0, active = 0;
 
-    if (userRangeDetails && address) {
-      userRangeDetails.forEach((r) => {
+    if (userBattleDetails && address) {
+      userBattleDetails.forEach((r) => {
         if (r.status === 'success' && r.result) {
-          const [, , winner, , , , , , isResolved] = r.result as [string, string, string, bigint, bigint, bigint, bigint, bigint, boolean, string];
+          const b = r.result as Battle;
           total++;
-          if (isResolved) {
-            if (winner.toLowerCase() === address.toLowerCase()) wins++;
-            else if (winner !== ZERO_ADDRESS) losses++;
-          } else {
-            active++;
-          }
-        }
-      });
-    }
-
-    if (userFeeDetails && address) {
-      userFeeDetails.forEach((r) => {
-        if (r.status === 'success' && r.result) {
-          const [, , winner, , , , , , , isResolved] = r.result as [string, string, string, bigint, bigint, bigint, bigint, bigint, bigint, boolean, string];
-          total++;
-          if (isResolved) {
-            if (winner.toLowerCase() === address.toLowerCase()) wins++;
-            else if (winner !== ZERO_ADDRESS) losses++;
+          if (b.status === BattleStatus.RESOLVED) {
+            if (b.winner.toLowerCase() === address.toLowerCase()) wins++;
+            else if (b.winner !== ZERO_ADDRESS) losses++;
           } else {
             active++;
           }
@@ -75,11 +57,11 @@ export default function Profile() {
 
     const winRate = (wins + losses) > 0 ? ((wins / (wins + losses)) * 100).toFixed(1) : '0.0';
     return { wins, losses, total, active, winRate };
-  }, [userRangeDetails, userFeeDetails, address]);
+  }, [userBattleDetails, address]);
 
   // Full battle history
   type HistoryEntry = {
-    vaultType: 'range' | 'fee';
+    battleType: number;
     battleId: bigint;
     result: 'VICTORY' | 'DEFEAT' | 'ACTIVE';
     opponent: string;
@@ -89,51 +71,33 @@ export default function Profile() {
   const battleHistory = useMemo(() => {
     const history: HistoryEntry[] = [];
 
-    if (userRangeDetails && userRangeBattles && address) {
-      const [ids] = userRangeBattles as [bigint[], boolean[]];
-      userRangeDetails.forEach((r, i) => {
+    if (userBattleDetails && address) {
+      userBattleDetails.forEach((r, i) => {
         if (r.status === 'success' && r.result) {
-          const [creator, opponent, winner, , , , , totalValueUSD, isResolved] = r.result as [string, string, string, bigint, bigint, bigint, bigint, bigint, boolean, string];
-          const isUserCreator = creator.toLowerCase() === address.toLowerCase();
-          const opponentAddr = isUserCreator ? opponent : creator;
+          const b = r.result as Battle;
+          const isUserCreator = b.creator.toLowerCase() === address.toLowerCase();
+          const opponentAddr = isUserCreator ? b.opponent : b.creator;
           history.push({
-            vaultType: 'range',
-            battleId: ids[i],
-            result: isResolved
-              ? (winner.toLowerCase() === address.toLowerCase() ? 'VICTORY' : 'DEFEAT')
+            battleType: b.battleType,
+            battleId: userIds[i],
+            result: b.status === BattleStatus.RESOLVED
+              ? (b.winner.toLowerCase() === address.toLowerCase() ? 'VICTORY' : 'DEFEAT')
               : 'ACTIVE',
             opponent: opponentAddr,
-            valueUSD: totalValueUSD,
-          });
-        }
-      });
-    }
-
-    if (userFeeDetails && userFeeBattles && address) {
-      const [ids] = userFeeBattles as [bigint[], boolean[]];
-      userFeeDetails.forEach((r, i) => {
-        if (r.status === 'success' && r.result) {
-          const [creator, opponent, winner, , , , , creatorLPValue, , isResolved] = r.result as [string, string, string, bigint, bigint, bigint, bigint, bigint, bigint, boolean, string];
-          const isUserCreator = creator.toLowerCase() === address.toLowerCase();
-          const opponentAddr = isUserCreator ? opponent : creator;
-          history.push({
-            vaultType: 'fee',
-            battleId: ids[i],
-            result: isResolved
-              ? (winner.toLowerCase() === address.toLowerCase() ? 'VICTORY' : 'DEFEAT')
-              : 'ACTIVE',
-            opponent: opponentAddr,
-            valueUSD: creatorLPValue,
+            valueUSD: b.creatorValueUSD,
           });
         }
       });
     }
 
     return history.reverse();
-  }, [userRangeDetails, userFeeDetails, userRangeBattles, userFeeBattles, address]);
+  }, [userBattleDetails, userIds, address]);
 
   const rankLabel = userStats.wins >= 10 ? 'ELITE GLADIATOR' : userStats.wins >= 3 ? 'VETERAN' : 'RECRUIT';
   const rankColor = userStats.wins >= 10 ? '#ed7f2f' : userStats.wins >= 3 ? '#42c7e6' : '#6b7280';
+
+  const typeColor = (bt: number) => bt === BattleType.RANGE ? '#42c7e6' : '#a855f7';
+  const typeLabel = (bt: number) => bt === BattleType.RANGE ? 'RNG' : 'FEE';
 
   // Not connected state
   if (!isConnected) {
@@ -203,14 +167,15 @@ export default function Profile() {
                 {formatAddress(address!, 6)}
               </p>
               <p className="text-[10px] font-mono text-gray-600 tracking-wider">
-                SEPOLIA TESTNET
+                ARBITRUM SEPOLIA
               </p>
             </div>
           </div>
 
           {/* Stats Grid */}
-          <div className="lg:col-span-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="lg:col-span-4 grid grid-cols-2 sm:grid-cols-5 gap-4">
             {[
+              { label: 'ELO RATING', value: playerElo !== null ? playerElo.toString() : '--', color: '#a855f7' },
               { label: 'TOTAL BATTLES', value: userStats.total.toString(), color: '#ed7f2f' },
               { label: 'VICTORIES', value: userStats.wins.toString(), color: '#22c55e' },
               { label: 'DEFEATS', value: userStats.losses.toString(), color: '#ef4444' },
@@ -290,8 +255,8 @@ export default function Profile() {
                 <div className="space-y-0">
                   {battleHistory.map((entry, i) => (
                     <Link
-                      key={`${entry.vaultType}-${entry.battleId}`}
-                      to={`/battle/${entry.vaultType}-${entry.battleId}`}
+                      key={entry.battleId.toString()}
+                      to={`/battle/${entry.battleId}`}
                       className="flex items-center justify-between py-3.5 px-3 -mx-3 rounded-lg hover:bg-white/[0.02] transition-colors"
                       style={{
                         borderBottom: i < battleHistory.length - 1 ? '1px solid rgba(255, 255, 255, 0.04)' : 'none',
@@ -310,15 +275,15 @@ export default function Profile() {
                           {entry.result}
                         </span>
 
-                        {/* Vault Type */}
+                        {/* Battle Type */}
                         <span
                           className="text-[10px] font-mono tracking-wider px-1.5 py-0.5 rounded"
                           style={{
-                            color: entry.vaultType === 'range' ? '#42c7e6' : '#a855f7',
-                            border: `1px solid ${entry.vaultType === 'range' ? 'rgba(66, 199, 230, 0.3)' : 'rgba(168, 85, 247, 0.3)'}`,
+                            color: typeColor(entry.battleType),
+                            border: `1px solid ${typeColor(entry.battleType)}4d`,
                           }}
                         >
-                          {entry.vaultType === 'range' ? 'RNG' : 'FEE'}
+                          {typeLabel(entry.battleType)}
                         </span>
 
                         {/* Battle Info */}
@@ -401,7 +366,7 @@ export default function Profile() {
                           POSITION #{id.toString()}
                         </p>
                         <p className="text-[10px] font-mono text-gray-600 tracking-wider">
-                          V4 LP NFT
+                          LP NFT
                         </p>
                       </div>
                       <Link
@@ -423,7 +388,7 @@ export default function Profile() {
                     NO LP POSITIONS FOUND
                   </p>
                   <p className="text-[10px] font-mono text-gray-700 tracking-wider">
-                    ADD LIQUIDITY ON UNISWAP V4 TO GET STARTED
+                    ADD LIQUIDITY TO GET STARTED
                   </p>
                 </div>
               )}
@@ -434,7 +399,7 @@ export default function Profile() {
         {/* Terminal Footer */}
         <div className="mt-16 text-center">
           <p className="text-xs font-mono text-gray-600 tracking-wider">
-            TERMINAL STATUS: <span style={{ color: '#22c55e' }}>ONLINE</span> // PILOT: {formatAddress(address!, 4)} // PROFILE_V4
+            TERMINAL STATUS: <span style={{ color: '#22c55e' }}>ONLINE</span> // PILOT: {formatAddress(address!, 4)} // ARBITRUM SEPOLIA
           </p>
         </div>
       </div>
