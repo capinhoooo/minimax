@@ -141,8 +141,8 @@ export async function runDemo(agent: BattleAgent) {
   console.log(`    ${C.green}LI.FI:${C.reset}             Cross-chain routing via SDK`);
 
   console.log(`\n  ${C.blue}Contracts (Arbitrum Sepolia):${C.reset}`);
-  console.log(`    BattleArena:     0x478505eb07B3C8943A642E51F066bcF8aC8ed51d`);
-  console.log(`    UniswapV4Adapter:0x244C49E7986feC5BaD7C567d588B9262eF5e0604`);
+  console.log(`    BattleArena:     0x6cfFE36cC727A649bC8D269CbD675552d0A550F6`);
+  console.log(`    UniswapV4Adapter:0xca6118BD65778C454B67B11DE39B9BB881915b40`);
   console.log(`    CamelotAdapter:  0x5442068A4Cd117F26047c89f0A87D635112c886E`);
   console.log(`    ScoringEngine:   0xd34ffbe6d046cb1a3450768664caf97106d18204 (Stylus)`);
   console.log(`    Leaderboard:     0x7feb2cf23797fd950380cd9ad4b7d4cad4b3c85b (Stylus)`);
