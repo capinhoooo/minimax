@@ -5,9 +5,9 @@ import ConnectButton from '../wallet/ConnectButton';
 const navigation = [
   { name: 'LOBBY', href: '/lobby' },
   { name: 'BATTLES', href: '/battle', hasBadge: true },
+  { name: 'LIQUIDITY', href: '/liquidity' },
   { name: 'LEADERBOARD', href: '/leaderboard' },
   { name: 'AGENT', href: '/agent' },
-  { name: 'SWAP / BRIDGE', href: '/swap' },
   { name: 'PROFILE', href: '/profile' },
 ];
 

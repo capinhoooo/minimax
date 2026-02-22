@@ -36,7 +36,6 @@ export default function Layout() {
                   { label: 'LOBBY', to: '/lobby' },
                   { label: 'BATTLES', to: '/battle' },
                   { label: 'LEADERBOARD', to: '/leaderboard' },
-                  { label: 'SWAP / BRIDGE', to: '/swap' },
                 ].map((link) => (
                   <Link
                     key={link.label}
@@ -107,7 +106,7 @@ export default function Layout() {
               &copy; 2026 MINIMAX ARENA // ALL RIGHTS RESERVED
             </p>
             <p className="text-[10px] font-mono text-gray-700 tracking-wider">
-              STATUS: <span style={{ color: '#22c55e' }}>OPERATIONAL</span> // CHAIN: ETHEREUM SEPOLIA
+              STATUS: <span style={{ color: '#22c55e' }}>OPERATIONAL</span> // CHAIN: ARBITRUM SEPOLIA
             </p>
           </div>
         </div>
