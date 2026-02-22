@@ -1,22 +1,19 @@
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { Trophy } from 'lucide-react';
 import { formatAddress } from '../../lib/utils';
-import type { VaultType } from '../../types';
 
 interface PerfData {
-  creatorInRange: boolean;
-  opponentInRange: boolean;
   creatorPct: number;
   opponentPct: number;
   leader: string;
   type: 'range' | 'fee';
-  creatorFeeGrowth?: bigint;
-  opponentFeeGrowth?: bigint;
+  creatorInRangeTime?: number;
+  opponentInRangeTime?: number;
 }
 
 interface PerformanceChartProps {
   perfData: PerfData | null;
-  vaultType: VaultType;
+  vaultType: string;
   creatorAddress: string;
   opponentAddress: string;
 }
@@ -98,21 +95,6 @@ export default function PerformanceChart({ perfData, vaultType, creatorAddress, 
           <p className="text-3xl font-black font-mono mb-1" style={{ color: CREATOR_COLOR }}>
             {creatorPct.toFixed(1)}%
           </p>
-
-          <div
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full"
-            style={{
-              background: perfData.creatorInRange ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-              border: `1px solid ${perfData.creatorInRange ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
-            }}
-          >
-            <span
-              className="text-[9px] font-mono font-bold tracking-wider"
-              style={{ color: perfData.creatorInRange ? '#22c55e' : '#ef4444' }}
-            >
-              {perfData.creatorInRange ? 'IN RANGE' : 'OUT'}
-            </span>
-          </div>
 
           <p className="text-[10px] font-mono text-gray-600 mt-2 tracking-wider">
             {formatAddress(creatorAddress, 4)}
@@ -211,21 +193,6 @@ export default function PerformanceChart({ perfData, vaultType, creatorAddress, 
           <p className="text-3xl font-black font-mono mb-1" style={{ color: OPPONENT_COLOR }}>
             {opponentPct.toFixed(1)}%
           </p>
-
-          <div
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full"
-            style={{
-              background: perfData.opponentInRange ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-              border: `1px solid ${perfData.opponentInRange ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
-            }}
-          >
-            <span
-              className="text-[9px] font-mono font-bold tracking-wider"
-              style={{ color: perfData.opponentInRange ? '#22c55e' : '#ef4444' }}
-            >
-              {perfData.opponentInRange ? 'IN RANGE' : 'OUT'}
-            </span>
-          </div>
 
           <p className="text-[10px] font-mono text-gray-600 mt-2 tracking-wider">
             {formatAddress(opponentAddress, 4)}

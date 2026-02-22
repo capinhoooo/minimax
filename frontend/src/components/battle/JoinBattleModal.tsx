@@ -3,30 +3,33 @@ import { useAccount } from 'wagmi';
 import { Loader2, X, Swords } from 'lucide-react';
 import { useUserPositions, useIsApprovedForAll, useSetApprovalForAll } from '../../hooks/usePositionManager';
 import { useJoinBattle } from '../../hooks/useBattleVault';
-import { getVaultAddress } from '../../lib/contracts';
-import type { VaultType } from '../../types';
+import { CONTRACTS } from '../../lib/contracts';
+import { DexType, dexTypeName } from '../../types';
 
 interface JoinBattleModalProps {
   isOpen: boolean;
   onClose: () => void;
   battleId: bigint;
-  vaultType: VaultType;
 }
 
-export default function JoinBattleModal({ isOpen, onClose, battleId, vaultType }: JoinBattleModalProps) {
+export default function JoinBattleModal({ isOpen, onClose, battleId }: JoinBattleModalProps) {
   const { address, isConnected } = useAccount();
   const [selectedTokenId, setSelectedTokenId] = useState<bigint | null>(null);
+  const [dexType, setDexType] = useState<DexType>(DexType.UNISWAP_V4);
 
-  // Fetch user's LP positions
-  const { tokenIds: userPositions, isLoading: loadingPositions } = useUserPositions(address);
+  // Pick the correct NFT contract and adapter based on selected DEX
+  const nftContract = dexType === DexType.CAMELOT_V3 ? CONTRACTS.CAMELOT_NFT_MANAGER : CONTRACTS.POSITION_MANAGER;
+  const adapterContract = dexType === DexType.CAMELOT_V3 ? CONTRACTS.CAMELOT_ADAPTER : CONTRACTS.UNISWAP_V4_ADAPTER;
 
-  // Check approval
-  const vaultAddress = getVaultAddress(vaultType);
-  const { data: isApproved, refetch: refetchApproval } = useIsApprovedForAll(address, vaultAddress);
+  // Fetch user's LP positions from the correct DEX
+  const { tokenIds: userPositions, isLoading: loadingPositions } = useUserPositions(address, nftContract);
+
+  // Check approval: adapter needs approval on the NFT contract
+  const { data: isApproved, refetch: refetchApproval } = useIsApprovedForAll(address, adapterContract, nftContract);
 
   // Write hooks
   const { setApprovalForAll, isPending: approvePending, isSuccess: approveSuccess } = useSetApprovalForAll();
-  const { joinBattle, isPending: joinPending, isSuccess: joinSuccess } = useJoinBattle(vaultType);
+  const { joinBattle, isPending: joinPending, isSuccess: joinSuccess } = useJoinBattle();
 
   // Refetch approval after approve succeeds
   useMemo(() => {
@@ -52,7 +55,10 @@ export default function JoinBattleModal({ isOpen, onClose, battleId, vaultType }
 
   // Reset selection when modal opens
   useEffect(() => {
-    if (isOpen) setSelectedTokenId(null);
+    if (isOpen) {
+      setSelectedTokenId(null);
+      setDexType(DexType.UNISWAP_V4);
+    }
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -60,12 +66,12 @@ export default function JoinBattleModal({ isOpen, onClose, battleId, vaultType }
   const needsApproval = !isApproved;
 
   const handleApprove = () => {
-    setApprovalForAll(vaultAddress, true);
+    setApprovalForAll(adapterContract, true, nftContract);
   };
 
   const handleJoin = () => {
     if (selectedTokenId === null) return;
-    joinBattle(battleId, selectedTokenId);
+    joinBattle(battleId, dexType, selectedTokenId);
   };
 
   return (
@@ -111,11 +117,34 @@ export default function JoinBattleModal({ isOpen, onClose, battleId, vaultType }
             }}
           >
             <p className="text-[10px] font-mono tracking-wider" style={{ color: '#ed7f2f' }}>
-              BATTLE #{battleId.toString()} // {vaultType.toUpperCase()} VAULT
+              BATTLE #{battleId.toString()} // BATTLEARENA
             </p>
             <p className="text-xs font-mono text-gray-500 mt-1 tracking-wider">
-              Select your LP position to enter this battle
+              Select your DEX and LP position to enter this battle
             </p>
+          </div>
+
+          {/* DEX Type Selector */}
+          <div>
+            <label className="block text-xs font-mono font-bold tracking-wider mb-2" style={{ color: '#42c7e6' }}>
+              DEX PLATFORM
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {([DexType.UNISWAP_V4, DexType.CAMELOT_V3] as const).map((dex) => (
+                <button
+                  key={dex}
+                  onClick={() => { setDexType(dex); setSelectedTokenId(null); }}
+                  className="px-3 py-2.5 rounded-lg text-xs font-mono font-bold tracking-wider transition-all"
+                  style={{
+                    background: dexType === dex ? 'rgba(66, 199, 230, 0.15)' : 'rgba(15, 15, 15, 0.9)',
+                    border: dexType === dex ? '1px solid rgba(66, 199, 230, 0.5)' : '1px solid rgba(255, 255, 255, 0.1)',
+                    color: dexType === dex ? '#42c7e6' : '#6b7280',
+                  }}
+                >
+                  {dexTypeName(dex).toUpperCase()}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Position Selector */}
@@ -226,7 +255,7 @@ export default function JoinBattleModal({ isOpen, onClose, battleId, vaultType }
 
           {/* Warning */}
           <p className="text-center text-[10px] font-mono tracking-wider text-gray-600 leading-relaxed">
-            YOUR LP NFT WILL BE TRANSFERRED TO THE VAULT. IT WILL BE RETURNED WHEN THE BATTLE RESOLVES.
+            YOUR LP NFT WILL BE TRANSFERRED TO THE BATTLEARENA. IT WILL BE RETURNED WHEN THE BATTLE RESOLVES.
           </p>
         </div>
       </div>
