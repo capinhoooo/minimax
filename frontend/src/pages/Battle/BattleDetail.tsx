@@ -2,60 +2,87 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Loader2, ArrowLeft, Swords, Clock, Trophy, ExternalLink } from 'lucide-react';
 import { useAccount } from 'wagmi';
-import {
-  useRangeBattle,
-  useFeeBattle,
-  useTimeRemaining,
-  useCurrentPerformance,
-  useCurrentFeePerformance,
-  useResolveBattle,
-} from '../../hooks/useBattleVault';
+import { useBattle, useResolveBattle } from '../../hooks/useBattleVault';
 import { useBattleEvents } from '../../hooks/useBattleEvents';
+import { useCalculateRangeScore, useCalculateFeeScore, useNormalizeCrossDex, usePlayerStats } from '../../hooks/useStylus';
 import { formatAddress, formatUSD, getExplorerUrl } from '../../lib/utils';
 import JoinBattleModal from '../../components/battle/JoinBattleModal';
 import PerformanceChart from '../../components/battle/PerformanceChart';
-import type { VaultType } from '../../types';
+import { BattleStatus, BattleType, battleTypeName, dexTypeName } from '../../types';
+import type { Battle } from '../../types';
 
 export default function BattleDetail() {
   const { id } = useParams();
   const { address } = useAccount();
 
-  // Parse the route param: "range-0" or "fee-1"
-  const { vaultType, battleId } = useMemo(() => {
-    if (!id) return { vaultType: 'range' as VaultType, battleId: undefined };
-    const parts = id.split('-');
-    if (parts.length === 2 && (parts[0] === 'range' || parts[0] === 'fee')) {
-      return { vaultType: parts[0] as VaultType, battleId: BigInt(parts[1]) };
+  // Parse battle ID from route
+  const battleId = useMemo(() => {
+    if (!id) return undefined;
+    try {
+      return BigInt(id);
+    } catch {
+      return undefined;
     }
-    return { vaultType: 'range' as VaultType, battleId: BigInt(id) };
   }, [id]);
 
-  // Fetch battle data
-  const { data: rangeBattleData, isLoading: loadingRange } = useRangeBattle(
-    vaultType === 'range' ? battleId : undefined
-  );
-  const { data: feeBattleData, isLoading: loadingFee } = useFeeBattle(
-    vaultType === 'fee' ? battleId : undefined
-  );
+  // Fetch battle data from single BattleArena contract
+  const { data: battleData, isLoading, refetch: refetchBattle } = useBattle(battleId);
 
-  const { data: timeRemaining, refetch: refetchTime } = useTimeRemaining(battleId, vaultType);
-  const { data: rangePerf } = useCurrentPerformance(
-    vaultType === 'range' && battleId !== undefined ? battleId : undefined
-  );
-  const { data: feePerf } = useCurrentFeePerformance(
-    vaultType === 'fee' && battleId !== undefined ? battleId : undefined
-  );
+  // Normalize battle data from the struct
+  const battle = useMemo(() => {
+    if (!battleData) return null;
+    const b = battleData as Battle;
+    return {
+      creator: b.creator,
+      opponent: b.opponent,
+      winner: b.winner,
+      creatorDex: b.creatorDex,
+      opponentDex: b.opponentDex,
+      creatorTokenId: b.creatorTokenId,
+      opponentTokenId: b.opponentTokenId,
+      creatorValueUSD: b.creatorValueUSD,
+      opponentValueUSD: b.opponentValueUSD,
+      battleType: b.battleType,
+      status: b.status,
+      startTime: b.startTime,
+      duration: b.duration,
+      token0: b.token0,
+      token1: b.token1,
+      creatorInRangeTime: b.creatorInRangeTime,
+      opponentInRangeTime: b.opponentInRangeTime,
+      lastUpdateTime: b.lastUpdateTime,
+      creatorStartFeeGrowth0: b.creatorStartFeeGrowth0,
+      creatorStartFeeGrowth1: b.creatorStartFeeGrowth1,
+      opponentStartFeeGrowth0: b.opponentStartFeeGrowth0,
+      opponentStartFeeGrowth1: b.opponentStartFeeGrowth1,
+      creatorLiquidity: b.creatorLiquidity,
+      opponentLiquidity: b.opponentLiquidity,
+    };
+  }, [battleData]);
 
-  const isLoading = loadingRange || loadingFee;
+  // Compute time remaining from struct
+  const computeTimeRemaining = useMemo(() => {
+    if (!battle || battle.status !== BattleStatus.ACTIVE) return 0;
+    const now = Math.floor(Date.now() / 1000);
+    const endTime = Number(battle.startTime) + Number(battle.duration);
+    return Math.max(0, endTime - now);
+  }, [battle]);
+
+  // Write hooks
+  const { resolveBattle, isPending: resolvePending } = useResolveBattle();
+
+  // Join battle modal
+  const [showJoinModal, setShowJoinModal] = useState(false);
+
+  // On-chain battle events
+  const { events: battleEvents, isLoading: eventsLoading } = useBattleEvents(battleId);
 
   // Local countdown timer
   const [localTime, setLocalTime] = useState<number>(0);
 
   useEffect(() => {
-    if (timeRemaining !== undefined) {
-      setLocalTime(Number(timeRemaining as bigint));
-    }
-  }, [timeRemaining]);
+    setLocalTime(computeTimeRemaining);
+  }, [computeTimeRemaining]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -64,67 +91,100 @@ export default function BattleDetail() {
     return () => clearInterval(timer);
   }, []);
 
+  // Refresh battle data every 30s
   useEffect(() => {
-    const interval = setInterval(() => refetchTime(), 30000);
+    const interval = setInterval(() => refetchBattle(), 30000);
     return () => clearInterval(interval);
-  }, [refetchTime]);
+  }, [refetchBattle]);
 
-  // Normalize battle data
-  const battle = useMemo(() => {
-    if (vaultType === 'range' && rangeBattleData) {
-      const [creator, opponent, winner, creatorTokenId, opponentTokenId, startTime, duration, totalValueUSD, isResolved, status] = rangeBattleData as [string, string, string, bigint, bigint, bigint, bigint, bigint, boolean, string];
-      return { creator, opponent, winner, creatorTokenId, opponentTokenId, startTime, duration, valueUSD: totalValueUSD, isResolved, status };
-    }
-    if (vaultType === 'fee' && feeBattleData) {
-      const [creator, opponent, winner, creatorTokenId, opponentTokenId, startTime, duration, creatorLPValue, , isResolved, status] = feeBattleData as [string, string, string, bigint, bigint, bigint, bigint, bigint, bigint, boolean, string];
-      return { creator, opponent, winner, creatorTokenId, opponentTokenId, startTime, duration, valueUSD: creatorLPValue, isResolved, status };
-    }
-    return null;
-  }, [vaultType, rangeBattleData, feeBattleData]);
-
-  // Write hooks
-  const { resolveBattle, isPending: resolvePending } = useResolveBattle(vaultType);
-
-  // Join battle modal
-  const [showJoinModal, setShowJoinModal] = useState(false);
-
-  // On-chain battle events
-  const { events: battleEvents, isLoading: eventsLoading } = useBattleEvents(battleId, vaultType);
-
-  // ---- Performance calculations ----
+  // Performance calculations from struct data
   const perfData = useMemo(() => {
-    if (vaultType === 'range' && rangePerf) {
-      const [creatorInRange, opponentInRange, creatorTime, opponentTime, leader] = rangePerf as [boolean, boolean, bigint, bigint, string];
-      const cTime = Number(creatorTime);
-      const oTime = Number(opponentTime);
+    if (!battle || battle.status === BattleStatus.PENDING) return null;
+
+    if (battle.battleType === BattleType.RANGE) {
+      const cTime = Number(battle.creatorInRangeTime);
+      const oTime = Number(battle.opponentInRangeTime);
       const total = cTime + oTime;
       return {
-        creatorInRange,
-        opponentInRange,
-        creatorPct: total > 0 ? (cTime / total) * 100 : 0,
-        opponentPct: total > 0 ? (oTime / total) * 100 : 0,
-        leader,
+        creatorPct: total > 0 ? (cTime / total) * 100 : 50,
+        opponentPct: total > 0 ? (oTime / total) * 100 : 50,
+        creatorInRangeTime: cTime,
+        opponentInRangeTime: oTime,
+        leader: cTime >= oTime ? battle.creator : battle.opponent,
         type: 'range' as const,
       };
     }
-    if (vaultType === 'fee' && feePerf) {
-      const [creatorFeeGrowth, opponentFeeGrowth, creatorFeeRate, opponentFeeRate, leader] = feePerf as [bigint, bigint, bigint, bigint, string];
-      const cRate = Number(creatorFeeRate);
-      const oRate = Number(opponentFeeRate);
-      const total = cRate + oRate;
+
+    if (battle.battleType === BattleType.FEE) {
+      const cFee = Number(battle.creatorStartFeeGrowth0) + Number(battle.creatorStartFeeGrowth1);
+      const oFee = Number(battle.opponentStartFeeGrowth0) + Number(battle.opponentStartFeeGrowth1);
+      const total = cFee + oFee;
       return {
-        creatorInRange: true,
-        opponentInRange: true,
-        creatorPct: total > 0 ? (cRate / total) * 100 : 0,
-        opponentPct: total > 0 ? (oRate / total) * 100 : 0,
-        creatorFeeGrowth,
-        opponentFeeGrowth,
-        leader,
+        creatorPct: total > 0 ? (cFee / total) * 100 : 50,
+        opponentPct: total > 0 ? (oFee / total) * 100 : 50,
+        creatorInRangeTime: 0,
+        opponentInRangeTime: 0,
+        leader: cFee >= oFee ? battle.creator : battle.opponent,
         type: 'fee' as const,
       };
     }
+
     return null;
-  }, [vaultType, rangePerf, feePerf]);
+  }, [battle]);
+
+  const zeroAddr = '0x0000000000000000000000000000000000000000';
+
+  // Stylus ScoringEngine: compute on-chain scores
+  const isRangeBattle = battle?.battleType === BattleType.RANGE;
+  const totalElapsed = battle && battle.status !== BattleStatus.PENDING
+    ? BigInt(Math.max(1, Math.floor(Date.now() / 1000) - Number(battle.startTime)))
+    : undefined;
+
+  const { data: creatorRangeScore } = useCalculateRangeScore(
+    isRangeBattle ? battle?.creatorInRangeTime : undefined,
+    isRangeBattle ? totalElapsed : undefined,
+    isRangeBattle ? 10n : undefined,
+  );
+  const { data: opponentRangeScore } = useCalculateRangeScore(
+    isRangeBattle ? battle?.opponentInRangeTime : undefined,
+    isRangeBattle ? totalElapsed : undefined,
+    isRangeBattle ? 10n : undefined,
+  );
+  const { data: creatorFeeScore } = useCalculateFeeScore(
+    !isRangeBattle ? battle?.creatorStartFeeGrowth0 : undefined,
+    !isRangeBattle ? battle?.creatorValueUSD : undefined,
+    !isRangeBattle ? battle?.duration : undefined,
+  );
+  const { data: opponentFeeScore } = useCalculateFeeScore(
+    !isRangeBattle ? battle?.opponentStartFeeGrowth0 : undefined,
+    !isRangeBattle ? battle?.opponentValueUSD : undefined,
+    !isRangeBattle ? battle?.duration : undefined,
+  );
+
+  const rawCreatorScore = isRangeBattle ? creatorRangeScore : creatorFeeScore;
+  const rawOpponentScore = isRangeBattle ? opponentRangeScore : opponentFeeScore;
+
+  const { data: normalizedCreatorScore } = useNormalizeCrossDex(
+    rawCreatorScore as bigint | undefined,
+    battle?.creatorDex,
+  );
+  const { data: normalizedOpponentScore } = useNormalizeCrossDex(
+    rawOpponentScore as bigint | undefined,
+    battle?.opponentDex,
+  );
+
+  // Stylus Leaderboard: player ELO
+  const { data: creatorStats } = usePlayerStats(battle?.creator as `0x${string}` | undefined);
+  const { data: opponentStats } = usePlayerStats(
+    battle?.opponent !== zeroAddr ? (battle?.opponent as `0x${string}`) : undefined,
+  );
+
+  const formatScore = (score: unknown) => {
+    if (!score) return '--';
+    const s = Number(score as bigint);
+    if (s === 0) return '0';
+    return (s / 1e18).toFixed(4);
+  };
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -133,29 +193,29 @@ export default function BattleDetail() {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const zeroAddr = '0x0000000000000000000000000000000000000000';
-  const isOpen = battle?.status === 'pending' || battle?.status === 'waiting_for_opponent';
-  const isReadyToResolve = battle?.status === 'ready_to_resolve';
+  const isOpen = battle?.status === BattleStatus.PENDING;
+  const isExpired = battle?.status === BattleStatus.EXPIRED;
+  const isResolved = battle?.status === BattleStatus.RESOLVED;
   const isCreator = address && battle?.creator.toLowerCase() === address.toLowerCase();
   const isOpponent = address && battle?.opponent.toLowerCase() === address.toLowerCase();
 
-  const statusColor = (s: string) => {
+  const statusLabel = (s: number) => {
     switch (s) {
-      case 'pending': case 'waiting_for_opponent': return '#22c55e';
-      case 'ongoing': return '#42c7e6';
-      case 'ready_to_resolve': return '#ed7f2f';
-      case 'resolved': return '#6b7280';
-      default: return '#6b7280';
+      case BattleStatus.PENDING: return 'OPEN';
+      case BattleStatus.ACTIVE: return 'LIVE';
+      case BattleStatus.EXPIRED: return 'RESOLVE';
+      case BattleStatus.RESOLVED: return 'ENDED';
+      default: return 'UNKNOWN';
     }
   };
 
-  const statusLabel = (s: string) => {
+  const statusColor = (s: number) => {
     switch (s) {
-      case 'pending': case 'waiting_for_opponent': return 'OPEN';
-      case 'ongoing': return 'LIVE';
-      case 'ready_to_resolve': return 'RESOLVE';
-      case 'resolved': return 'ENDED';
-      default: return s.toUpperCase();
+      case BattleStatus.PENDING: return '#22c55e';
+      case BattleStatus.ACTIVE: return '#42c7e6';
+      case BattleStatus.EXPIRED: return '#ed7f2f';
+      case BattleStatus.RESOLVED: return '#6b7280';
+      default: return '#6b7280';
     }
   };
 
@@ -175,6 +235,8 @@ export default function BattleDetail() {
       </div>
     );
   }
+
+  const vaultType = battle.battleType === BattleType.RANGE ? 'range' : 'fee';
 
   return (
     <div className="min-h-screen grid-bg">
@@ -215,11 +277,11 @@ export default function BattleDetail() {
             <span
               className="text-[10px] font-mono tracking-widest px-2 py-0.5 rounded"
               style={{
-                color: vaultType === 'range' ? '#42c7e6' : '#a855f7',
-                border: `1px solid ${vaultType === 'range' ? 'rgba(66, 199, 230, 0.4)' : 'rgba(168, 85, 247, 0.4)'}`,
+                color: battle.battleType === BattleType.RANGE ? '#42c7e6' : '#a855f7',
+                border: `1px solid ${battle.battleType === BattleType.RANGE ? 'rgba(66, 199, 230, 0.4)' : 'rgba(168, 85, 247, 0.4)'}`,
               }}
             >
-              {vaultType === 'range' ? 'RANGE' : 'FEE'}
+              {battleTypeName(battle.battleType).toUpperCase()}
             </span>
           </div>
 
@@ -234,7 +296,7 @@ export default function BattleDetail() {
           </div>
 
           <p className="text-sm font-mono text-gray-500 tracking-wider">
-            VALUE: {formatUSD(battle.valueUSD)}
+            VALUE: {formatUSD(battle.creatorValueUSD)}
           </p>
         </div>
 
@@ -252,6 +314,9 @@ export default function BattleDetail() {
           >
             <div className="flex items-center gap-2 mb-4">
               <span className="text-[10px] font-mono tracking-widest text-gray-500">CREATOR</span>
+              <span className="text-[9px] font-mono tracking-wider px-1.5 py-0.5 rounded" style={{ color: '#9ca3af', border: '1px solid rgba(156, 163, 175, 0.3)' }}>
+                {dexTypeName(battle.creatorDex).toUpperCase()}
+              </span>
               {isCreator && (
                 <span className="text-[9px] font-mono tracking-wider px-1.5 py-0.5 rounded" style={{ color: '#42c7e6', border: '1px solid rgba(66, 199, 230, 0.4)' }}>
                   YOU
@@ -270,10 +335,10 @@ export default function BattleDetail() {
               </div>
               <div className="p-3 rounded-lg" style={{ background: 'rgba(66, 199, 230, 0.05)', border: '1px solid rgba(66, 199, 230, 0.15)' }}>
                 <p className="text-[10px] font-mono text-gray-500 tracking-wider mb-1">
-                  {vaultType === 'range' ? 'IN RANGE' : 'FEE STATUS'}
+                  {battle.battleType === BattleType.RANGE ? 'IN-RANGE TIME' : 'FEE SCORE'}
                 </p>
-                <p className="text-lg font-bold" style={{ color: perfData?.creatorInRange ? '#22c55e' : '#ef4444' }}>
-                  {perfData ? (perfData.creatorInRange ? 'YES' : 'NO') : '--'}
+                <p className="text-lg font-bold" style={{ color: '#42c7e6' }}>
+                  {perfData ? `${perfData.creatorPct.toFixed(1)}%` : '--'}
                 </p>
               </div>
             </div>
@@ -330,6 +395,9 @@ export default function BattleDetail() {
               <>
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-[10px] font-mono tracking-widest text-gray-500">OPPONENT</span>
+                  <span className="text-[9px] font-mono tracking-wider px-1.5 py-0.5 rounded" style={{ color: '#9ca3af', border: '1px solid rgba(156, 163, 175, 0.3)' }}>
+                    {dexTypeName(battle.opponentDex).toUpperCase()}
+                  </span>
                   {isOpponent && (
                     <span className="text-[9px] font-mono tracking-wider px-1.5 py-0.5 rounded" style={{ color: '#ed7f2f', border: '1px solid rgba(237, 127, 47, 0.4)' }}>
                       YOU
@@ -348,10 +416,10 @@ export default function BattleDetail() {
                   </div>
                   <div className="p-3 rounded-lg" style={{ background: 'rgba(237, 127, 47, 0.05)', border: '1px solid rgba(237, 127, 47, 0.15)' }}>
                     <p className="text-[10px] font-mono text-gray-500 tracking-wider mb-1">
-                      {vaultType === 'range' ? 'IN RANGE' : 'FEE STATUS'}
+                      {battle.battleType === BattleType.RANGE ? 'IN-RANGE TIME' : 'FEE SCORE'}
                     </p>
-                    <p className="text-lg font-bold" style={{ color: perfData?.opponentInRange ? '#22c55e' : '#ef4444' }}>
-                      {perfData ? (perfData.opponentInRange ? 'YES' : 'NO') : '--'}
+                    <p className="text-lg font-bold" style={{ color: '#ed7f2f' }}>
+                      {perfData ? `${perfData.opponentPct.toFixed(1)}%` : '--'}
                     </p>
                   </div>
                 </div>
@@ -396,7 +464,7 @@ export default function BattleDetail() {
             }}
           >
             <h3 className="text-xs font-bold tracking-widest mb-5" style={{ color: '#ed7f2f' }}>
-              {vaultType === 'range' ? 'RANGE PERFORMANCE' : 'FEE PERFORMANCE'}
+              {battle.battleType === BattleType.RANGE ? 'RANGE PERFORMANCE' : 'FEE PERFORMANCE'}
             </h3>
 
             <div className="space-y-4">
@@ -452,7 +520,7 @@ export default function BattleDetail() {
         )}
 
         {/* ===== RESOLVE BUTTON ===== */}
-        {isReadyToResolve && (
+        {isExpired && (
           <div
             className="rounded-xl p-6 mb-8 text-center"
             style={{
@@ -479,7 +547,7 @@ export default function BattleDetail() {
         )}
 
         {/* ===== WINNER BANNER ===== */}
-        {battle.isResolved && battle.winner !== zeroAddr && (
+        {isResolved && battle.winner !== zeroAddr && (
           <div
             className="rounded-xl p-6 mb-8 text-center"
             style={{
@@ -578,11 +646,11 @@ export default function BattleDetail() {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Type</span>
-                <span className="text-white">{vaultType === 'range' ? 'Range Battle' : 'Fee Battle'}</span>
+                <span className="text-white">{battleTypeName(battle.battleType)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Value</span>
-                <span className="text-white">{formatUSD(battle.valueUSD)}</span>
+                <span className="text-white">{formatUSD(battle.creatorValueUSD)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Status</span>
@@ -604,33 +672,14 @@ export default function BattleDetail() {
             </h3>
             {perfData ? (
               <div className="space-y-3 text-sm font-mono">
-                {vaultType === 'range' ? (
-                  <>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Creator</span>
-                      <span style={{ color: perfData.creatorInRange ? '#22c55e' : '#ef4444' }}>
-                        {perfData.creatorInRange ? 'IN RANGE' : 'OUT'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Opponent</span>
-                      <span style={{ color: perfData.opponentInRange ? '#22c55e' : '#ef4444' }}>
-                        {perfData.opponentInRange ? 'IN RANGE' : 'OUT'}
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Creator Fees</span>
-                      <span className="text-white">{perfData.type === 'fee' ? formatUSD(perfData.creatorFeeGrowth!) : '--'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Opponent Fees</span>
-                      <span className="text-white">{perfData.type === 'fee' ? formatUSD(perfData.opponentFeeGrowth!) : '--'}</span>
-                    </div>
-                  </>
-                )}
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Creator Score</span>
+                  <span style={{ color: '#42c7e6' }}>{perfData.creatorPct.toFixed(1)}%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Opponent Score</span>
+                  <span style={{ color: '#ed7f2f' }}>{perfData.opponentPct.toFixed(1)}%</span>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Leader</span>
                   <span style={{ color: '#22c55e' }}>
@@ -645,22 +694,44 @@ export default function BattleDetail() {
             )}
           </div>
 
-          {/* Arena Rules */}
+          {/* Stylus Scoring (on-chain via Rust/WASM) */}
           <div
             className="rounded-xl p-5"
             style={{
               background: 'linear-gradient(135deg, rgba(10, 10, 10, 0.95), rgba(1, 1, 1, 0.98))',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              border: '1px solid rgba(168, 85, 247, 0.25)',
             }}
           >
-            <h3 className="text-xs font-bold tracking-widest mb-4" style={{ color: '#ed7f2f' }}>ARENA RULES</h3>
-            <p className="text-xs font-mono text-gray-400 leading-relaxed mb-4">
-              {vaultType === 'range'
-                ? 'The provider who stays in-range longer wins. When the battle ends, the position with more in-range time claims victory.'
-                : 'The provider who earns a higher fee rate (fees / LP value) wins. Efficiency matters more than raw fees.'}
-            </p>
-            <p className="text-xs font-mono text-gray-400 leading-relaxed">
-              Anyone can resolve an expired battle and earn a 1% resolver reward.
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xs font-bold tracking-widest" style={{ color: '#a855f7' }}>STYLUS SCORING</h3>
+              <span className="text-[9px] font-mono tracking-wider px-1.5 py-0.5 rounded" style={{ color: '#a855f7', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
+                RUST/WASM
+              </span>
+            </div>
+            <div className="space-y-3 text-sm font-mono">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Creator Score</span>
+                <span style={{ color: '#42c7e6' }}>{formatScore(normalizedCreatorScore ?? rawCreatorScore)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Opponent Score</span>
+                <span style={{ color: '#ed7f2f' }}>{formatScore(normalizedOpponentScore ?? rawOpponentScore)}</span>
+              </div>
+              {creatorStats && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Creator ELO</span>
+                  <span style={{ color: '#a855f7' }}>{Number((creatorStats as readonly bigint[])[0])}</span>
+                </div>
+              )}
+              {opponentStats && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Opponent ELO</span>
+                  <span style={{ color: '#a855f7' }}>{Number((opponentStats as readonly bigint[])[0])}</span>
+                </div>
+              )}
+            </div>
+            <p className="text-[10px] font-mono text-gray-700 mt-3 tracking-wider">
+              Scores computed by Stylus (Rust/WASM) on Arbitrum
             </p>
           </div>
         </div>
@@ -668,7 +739,7 @@ export default function BattleDetail() {
         {/* Terminal Footer */}
         <div className="text-center py-12">
           <p className="text-xs font-mono text-gray-600 tracking-wider">
-            UNISWAP_V4_ARENA_CLIENT // REAL-TIME DATA STREAM // SEPOLIA TESTNET
+            MULTI_DEX_ARENA_CLIENT // REAL-TIME DATA STREAM // ARBITRUM SEPOLIA
           </p>
         </div>
       </div>
@@ -679,7 +750,6 @@ export default function BattleDetail() {
           isOpen={showJoinModal}
           onClose={() => setShowJoinModal(false)}
           battleId={battleId}
-          vaultType={vaultType}
         />
       )}
     </div>

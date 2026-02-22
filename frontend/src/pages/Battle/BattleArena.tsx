@@ -1,30 +1,38 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Loader2 } from 'lucide-react';
-import { useActiveBattles, useRangeBattles, useFeeBattles } from '../../hooks/useBattleVault';
+import { useActiveBattles, usePendingBattles, useBattles } from '../../hooks/useBattleVault';
 import { formatAddress, formatUSD, formatTimeRemaining } from '../../lib/utils';
+import { BattleStatus, BattleType, battleTypeName, dexTypeName } from '../../types';
+import type { Battle } from '../../types';
 
 export default function BattleArena() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [vaultFilter, setVaultFilter] = useState<'all' | 'range' | 'fee'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'range' | 'fee'>('all');
 
-  // Fetch active battles from both vaults
-  const { data: rangeIds, isLoading: loadingRange } = useActiveBattles('range');
-  const { data: feeIds, isLoading: loadingFee } = useActiveBattles('fee');
+  // Fetch active and pending battle IDs
+  const { data: activeIds, isLoading: loadingActive } = useActiveBattles();
+  const { data: pendingIds, isLoading: loadingPending } = usePendingBattles();
 
-  // Fetch battle details for each
-  const { data: rangeBattles } = useRangeBattles((rangeIds as readonly bigint[]) ?? []);
-  const { data: feeBattles } = useFeeBattles((feeIds as readonly bigint[]) ?? []);
+  // Combine all IDs
+  const allIds = [
+    ...((activeIds as readonly bigint[]) ?? []),
+    ...((pendingIds as readonly bigint[]) ?? []),
+  ];
 
-  const isLoading = loadingRange || loadingFee;
+  // Fetch battle details for all
+  const { data: battleResults } = useBattles(allIds);
 
-  // Normalize battle data from both vaults into a unified list
+  const isLoading = loadingActive || loadingPending;
+
+  // Normalize battle data into a unified list
   type BattleItem = {
     id: bigint;
-    vaultType: 'range' | 'fee';
+    battleType: number;
+    creatorDex: number;
     creator: string;
     opponent: string;
-    status: string;
+    status: number;
     valueUSD: bigint;
     duration: bigint;
     startTime: bigint;
@@ -32,39 +40,20 @@ export default function BattleArena() {
 
   const battles: BattleItem[] = [];
 
-  if (rangeBattles && rangeIds) {
-    const ids = rangeIds as readonly bigint[];
-    rangeBattles.forEach((r, i) => {
+  if (battleResults) {
+    battleResults.forEach((r, i) => {
       if (r.status === 'success' && r.result) {
-        const [creator, opponent, , , , startTime, duration, totalValueUSD, , status] = r.result as [string, string, string, bigint, bigint, bigint, bigint, bigint, boolean, string];
+        const b = r.result as Battle;
         battles.push({
-          id: ids[i],
-          vaultType: 'range',
-          creator,
-          opponent,
-          status,
-          valueUSD: totalValueUSD,
-          duration,
-          startTime,
-        });
-      }
-    });
-  }
-
-  if (feeBattles && feeIds) {
-    const ids = feeIds as readonly bigint[];
-    feeBattles.forEach((r, i) => {
-      if (r.status === 'success' && r.result) {
-        const [creator, opponent, , , , startTime, duration, creatorLPValue, , , status] = r.result as [string, string, string, bigint, bigint, bigint, bigint, bigint, bigint, boolean, string];
-        battles.push({
-          id: ids[i],
-          vaultType: 'fee',
-          creator,
-          opponent,
-          status,
-          valueUSD: creatorLPValue,
-          duration,
-          startTime,
+          id: allIds[i],
+          battleType: b.battleType,
+          creatorDex: b.creatorDex,
+          creator: b.creator,
+          opponent: b.opponent,
+          status: b.status,
+          valueUSD: b.creatorValueUSD,
+          duration: b.duration,
+          startTime: b.startTime,
         });
       }
     });
@@ -72,7 +61,8 @@ export default function BattleArena() {
 
   // Filter
   const filtered = battles.filter((b) => {
-    if (vaultFilter !== 'all' && b.vaultType !== vaultFilter) return false;
+    if (typeFilter === 'range' && b.battleType !== BattleType.RANGE) return false;
+    if (typeFilter === 'fee' && b.battleType !== BattleType.FEE) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       return (
@@ -84,22 +74,22 @@ export default function BattleArena() {
     return true;
   });
 
-  const statusLabel = (s: string) => {
+  const statusLabel = (s: number) => {
     switch (s) {
-      case 'pending': case 'waiting_for_opponent': return 'OPEN';
-      case 'ongoing': return 'LIVE';
-      case 'ready_to_resolve': return 'RESOLVE';
-      case 'resolved': return 'ENDED';
-      default: return s.toUpperCase();
+      case BattleStatus.PENDING: return 'OPEN';
+      case BattleStatus.ACTIVE: return 'LIVE';
+      case BattleStatus.EXPIRED: return 'RESOLVE';
+      case BattleStatus.RESOLVED: return 'ENDED';
+      default: return 'UNKNOWN';
     }
   };
 
-  const statusColor = (s: string) => {
+  const statusColor = (s: number) => {
     switch (s) {
-      case 'pending': case 'waiting_for_opponent': return '#22c55e';
-      case 'ongoing': return '#42c7e6';
-      case 'ready_to_resolve': return '#ed7f2f';
-      case 'resolved': return '#6b7280';
+      case BattleStatus.PENDING: return '#22c55e';
+      case BattleStatus.ACTIVE: return '#42c7e6';
+      case BattleStatus.EXPIRED: return '#ed7f2f';
+      case BattleStatus.RESOLVED: return '#6b7280';
       default: return '#6b7280';
     }
   };
@@ -153,12 +143,12 @@ export default function BattleArena() {
             {(['all', 'range', 'fee'] as const).map((f) => (
               <button
                 key={f}
-                onClick={() => setVaultFilter(f)}
+                onClick={() => setTypeFilter(f)}
                 className="px-4 py-2.5 rounded-lg text-xs font-mono font-bold tracking-wider transition-all"
                 style={{
-                  background: vaultFilter === f ? 'rgba(237, 127, 47, 0.15)' : 'rgba(10, 10, 10, 0.6)',
-                  border: vaultFilter === f ? '1px solid rgba(237, 127, 47, 0.5)' : '1px solid rgba(255, 255, 255, 0.1)',
-                  color: vaultFilter === f ? '#ed7f2f' : '#6b7280',
+                  background: typeFilter === f ? 'rgba(237, 127, 47, 0.15)' : 'rgba(10, 10, 10, 0.6)',
+                  border: typeFilter === f ? '1px solid rgba(237, 127, 47, 0.5)' : '1px solid rgba(255, 255, 255, 0.1)',
+                  color: typeFilter === f ? '#ed7f2f' : '#6b7280',
                 }}
               >
                 {f.toUpperCase()}
@@ -180,7 +170,7 @@ export default function BattleArena() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filtered.map((battle) => (
               <div
-                key={`${battle.vaultType}-${battle.id}`}
+                key={battle.id.toString()}
                 className="rounded-xl overflow-hidden"
                 style={{
                   background: 'linear-gradient(135deg, rgba(10, 10, 10, 0.95), rgba(1, 1, 1, 0.98))',
@@ -206,16 +196,25 @@ export default function BattleArena() {
                     </span>
                   </div>
 
-                  {/* Vault Type Badge */}
-                  <div className="mb-4">
+                  {/* Type Badges */}
+                  <div className="flex gap-2 mb-4">
                     <span
                       className="text-[10px] font-mono tracking-widest px-2 py-0.5 rounded"
                       style={{
-                        color: battle.vaultType === 'range' ? '#42c7e6' : '#a855f7',
-                        border: `1px solid ${battle.vaultType === 'range' ? 'rgba(66, 199, 230, 0.4)' : 'rgba(168, 85, 247, 0.4)'}`,
+                        color: battle.battleType === BattleType.RANGE ? '#42c7e6' : '#a855f7',
+                        border: `1px solid ${battle.battleType === BattleType.RANGE ? 'rgba(66, 199, 230, 0.4)' : 'rgba(168, 85, 247, 0.4)'}`,
                       }}
                     >
-                      {battle.vaultType === 'range' ? 'RANGE BATTLE' : 'FEE BATTLE'}
+                      {battleTypeName(battle.battleType).toUpperCase()}
+                    </span>
+                    <span
+                      className="text-[10px] font-mono tracking-widest px-2 py-0.5 rounded"
+                      style={{
+                        color: '#9ca3af',
+                        border: '1px solid rgba(156, 163, 175, 0.3)',
+                      }}
+                    >
+                      {dexTypeName(battle.creatorDex).toUpperCase()}
                     </span>
                   </div>
 
@@ -243,19 +242,19 @@ export default function BattleArena() {
 
                   {/* Action Button */}
                   <Link
-                    to={`/battle/${battle.vaultType}-${battle.id}`}
+                    to={`/battle/${battle.id}`}
                     className="block w-full py-3 rounded-lg text-center font-medium text-sm tracking-wider transition-all hover:opacity-90"
                     style={{
-                      background: battle.status === 'pending' || battle.status === 'waiting_for_opponent'
+                      background: battle.status === BattleStatus.PENDING
                         ? 'linear-gradient(135deg, rgba(237, 127, 47, 0.2), rgba(138, 56, 21, 0.2))'
                         : 'rgba(255, 255, 255, 0.05)',
-                      border: battle.status === 'pending' || battle.status === 'waiting_for_opponent'
+                      border: battle.status === BattleStatus.PENDING
                         ? '1px solid rgba(237, 127, 47, 0.5)'
                         : '1px solid rgba(255, 255, 255, 0.1)',
-                      color: battle.status === 'pending' || battle.status === 'waiting_for_opponent' ? '#ed7f2f' : '#9ca3af',
+                      color: battle.status === BattleStatus.PENDING ? '#ed7f2f' : '#9ca3af',
                     }}
                   >
-                    {battle.status === 'pending' || battle.status === 'waiting_for_opponent'
+                    {battle.status === BattleStatus.PENDING
                       ? 'JOIN BATTLE'
                       : 'VIEW BATTLE'}
                   </Link>
@@ -289,7 +288,7 @@ export default function BattleArena() {
         {/* Terminal Status Footer */}
         <div className="mt-16 text-center">
           <p className="text-xs font-mono text-gray-600 tracking-wider">
-            TERMINAL STATUS: <span style={{ color: '#22c55e' }}>ONLINE</span> // BATTLES: {battles.length} // ARENA_V4_CORE
+            TERMINAL STATUS: <span style={{ color: '#22c55e' }}>ONLINE</span> // BATTLES: {battles.length} // ARBITRUM_SEPOLIA
           </p>
         </div>
       </div>

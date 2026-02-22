@@ -4,8 +4,8 @@ import { useAccount } from 'wagmi';
 import { Loader2 } from 'lucide-react';
 import { useCreateBattle } from '../../hooks/useBattleVault';
 import { useUserPositions, useIsApprovedForAll, useSetApprovalForAll } from '../../hooks/usePositionManager';
-import { getVaultAddress } from '../../lib/contracts';
-import type { VaultType } from '../../types';
+import { CONTRACTS } from '../../lib/contracts';
+import { BattleType, DexType, battleTypeName, dexTypeName } from '../../types';
 
 const durationUnits = [
   { label: 'SEC', unit: 'seconds', multiplier: 1 },
@@ -20,23 +20,27 @@ export default function CreateBattle() {
   const navigate = useNavigate();
   const { address, isConnected } = useAccount();
 
-  const [vaultType, setVaultType] = useState<VaultType>('range');
+  const [battleType, setBattleType] = useState<BattleType>(BattleType.RANGE);
+  const [dexType, setDexType] = useState<DexType>(DexType.UNISWAP_V4);
   const [tokenId, setTokenId] = useState<bigint | null>(null);
   const [durationAmount, setDurationAmount] = useState('1');
   const [durationUnit, setDurationUnit] = useState<typeof durationUnits[number]>(durationUnits[2]); // default: hours
 
   const durationSeconds = Math.floor(Number(durationAmount || 0) * durationUnit.multiplier);
 
-  // Fetch user's LP positions
-  const { tokenIds: userPositions, isLoading: loadingPositions } = useUserPositions(address);
+  // Pick the correct NFT contract and adapter based on selected DEX
+  const nftContract = dexType === DexType.CAMELOT_V3 ? CONTRACTS.CAMELOT_NFT_MANAGER : CONTRACTS.POSITION_MANAGER;
+  const adapterContract = dexType === DexType.CAMELOT_V3 ? CONTRACTS.CAMELOT_ADAPTER : CONTRACTS.UNISWAP_V4_ADAPTER;
 
-  // Check approval status
-  const vaultAddress = getVaultAddress(vaultType);
-  const { data: isApproved, refetch: refetchApproval } = useIsApprovedForAll(address, vaultAddress);
+  // Fetch user's LP positions from the correct DEX
+  const { tokenIds: userPositions, isLoading: loadingPositions } = useUserPositions(address, nftContract);
+
+  // Check approval status: adapter needs approval on the NFT contract (adapter calls safeTransferFrom)
+  const { data: isApproved, refetch: refetchApproval } = useIsApprovedForAll(address, adapterContract, nftContract);
 
   // Write hooks
-  const { setApprovalForAll, isPending: approvePending, isSuccess: approveSuccess } = useSetApprovalForAll();
-  const { createBattle, isPending: createPending, isSuccess: createSuccess, error: createError } = useCreateBattle(vaultType);
+  const { setApprovalForAll, isPending: approvePending, isSuccess: approveSuccess, error: approveError } = useSetApprovalForAll();
+  const { createBattle, isPending: createPending, isSuccess: createSuccess, error: createError } = useCreateBattle();
 
   // Refetch approval after approve succeeds
   useMemo(() => {
@@ -51,12 +55,12 @@ export default function CreateBattle() {
   }, [createSuccess, navigate]);
 
   const handleApprove = () => {
-    setApprovalForAll(vaultAddress, true);
+    setApprovalForAll(adapterContract, true, nftContract);
   };
 
   const handleCreate = () => {
     if (tokenId === null) return;
-    createBattle(tokenId, BigInt(durationSeconds));
+    createBattle(dexType, tokenId, BigInt(durationSeconds), battleType);
   };
 
   const needsApproval = !isApproved;
@@ -93,25 +97,51 @@ export default function CreateBattle() {
                   BATTLE TYPE
                 </label>
                 <div className="grid grid-cols-2 gap-3">
-                  {(['range', 'fee'] as const).map((type) => (
+                  {([BattleType.RANGE, BattleType.FEE] as const).map((type) => (
                     <button
                       key={type}
-                      onClick={() => setVaultType(type)}
+                      onClick={() => setBattleType(type)}
                       className="px-4 py-3 rounded-lg text-sm font-mono font-bold tracking-wider transition-all"
                       style={{
-                        background: vaultType === type ? 'rgba(66, 199, 230, 0.15)' : 'rgba(15, 15, 15, 0.9)',
-                        border: vaultType === type ? '1px solid rgba(66, 199, 230, 0.5)' : '1px solid rgba(255, 255, 255, 0.1)',
-                        color: vaultType === type ? '#42c7e6' : '#6b7280',
+                        background: battleType === type ? 'rgba(66, 199, 230, 0.15)' : 'rgba(15, 15, 15, 0.9)',
+                        border: battleType === type ? '1px solid rgba(66, 199, 230, 0.5)' : '1px solid rgba(255, 255, 255, 0.1)',
+                        color: battleType === type ? '#42c7e6' : '#6b7280',
                       }}
                     >
-                      {type === 'range' ? 'RANGE BATTLE' : 'FEE BATTLE'}
+                      {battleTypeName(type).toUpperCase()}
                     </button>
                   ))}
                 </div>
                 <p className="text-[10px] font-mono text-gray-600 mt-2 tracking-wider">
-                  {vaultType === 'range'
+                  {battleType === BattleType.RANGE
                     ? 'Win by staying in-range longer than your opponent'
                     : 'Win by earning a higher fee rate than your opponent'}
+                </p>
+              </div>
+
+              {/* DEX Type Selection */}
+              <div>
+                <label className="block text-xs font-mono font-bold tracking-wider mb-2" style={{ color: '#42c7e6' }}>
+                  DEX PLATFORM
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {([DexType.UNISWAP_V4, DexType.CAMELOT_V3] as const).map((dex) => (
+                    <button
+                      key={dex}
+                      onClick={() => { setDexType(dex); setTokenId(null); }}
+                      className="px-4 py-3 rounded-lg text-sm font-mono font-bold tracking-wider transition-all"
+                      style={{
+                        background: dexType === dex ? 'rgba(66, 199, 230, 0.15)' : 'rgba(15, 15, 15, 0.9)',
+                        border: dexType === dex ? '1px solid rgba(66, 199, 230, 0.5)' : '1px solid rgba(255, 255, 255, 0.1)',
+                        color: dexType === dex ? '#42c7e6' : '#6b7280',
+                      }}
+                    >
+                      {dexTypeName(dex).toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] font-mono text-gray-600 mt-2 tracking-wider">
+                  Cross-DEX battles: your opponent can use a different DEX
                 </p>
               </div>
 
@@ -217,7 +247,7 @@ export default function CreateBattle() {
                     TOTAL: {durationSeconds.toLocaleString()} SECONDS
                   </p>
                 )}
-              </div>             
+              </div>
             </div>
           </div>
 
@@ -243,13 +273,13 @@ export default function CreateBattle() {
                     color: 'white',
                   }}
                 >
-                  {vaultType === 'range' ? 'RANGE' : 'FEE'}
+                  {battleType === BattleType.RANGE ? 'RANGE' : 'FEE'}
                 </div>
               </div>
 
               <div className="p-6">
                 <h3 className="text-xl font-black text-center mb-1 tracking-wide" style={{ color: '#42c7e6' }}>
-                  {vaultType === 'range' ? 'RANGE BATTLE' : 'FEE BATTLE'} ARENA
+                  {battleTypeName(battleType).toUpperCase()} ARENA
                 </h3>
                 <div className="w-12 h-0.5 mx-auto mb-6" style={{ background: '#42c7e6' }} />
 
@@ -278,8 +308,12 @@ export default function CreateBattle() {
                   }}
                 >
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-mono text-gray-500 tracking-wider">VAULT_TYPE:</span>
-                    <span className="text-sm font-mono text-white">{vaultType.toUpperCase()}</span>
+                    <span className="text-xs font-mono text-gray-500 tracking-wider">BATTLE_TYPE:</span>
+                    <span className="text-sm font-mono text-white">{battleTypeName(battleType).toUpperCase()}</span>
+                  </div>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-mono text-gray-500 tracking-wider">DEX_PLATFORM:</span>
+                    <span className="text-sm font-mono text-white">{dexTypeName(dexType).toUpperCase()}</span>
                   </div>
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-xs font-mono text-gray-500 tracking-wider">MATCH_TOLERANCE:</span>
@@ -294,7 +328,7 @@ export default function CreateBattle() {
             </div>
 
             {/* Error Display */}
-            {createError && (
+            {(approveError || createError) && (
               <div
                 className="rounded-lg p-4"
                 style={{
@@ -303,7 +337,7 @@ export default function CreateBattle() {
                 }}
               >
                 <p className="text-xs font-mono text-red-400">
-                  ERROR: {createError.message.slice(0, 100)}
+                  ERROR: {(approveError || createError)!.message.slice(0, 200)}
                 </p>
               </div>
             )}
@@ -364,7 +398,7 @@ export default function CreateBattle() {
 
             {/* Warning */}
             <p className="text-center text-[10px] font-mono tracking-wider text-gray-600 leading-relaxed">
-              WARNING: YOUR LP NFT WILL BE TRANSFERRED TO THE VAULT CONTRACT. IT WILL BE RETURNED WHEN THE BATTLE RESOLVES.
+              WARNING: YOUR LP NFT WILL BE TRANSFERRED TO THE BATTLEARENA CONTRACT. IT WILL BE RETURNED WHEN THE BATTLE RESOLVES.
             </p>
           </div>
         </div>
@@ -372,7 +406,7 @@ export default function CreateBattle() {
         {/* Terminal Status Footer */}
         <div className="mt-16 text-center">
           <p className="text-xs font-mono text-gray-600 tracking-wider">
-            TERMINAL STATUS: <span style={{ color: '#22c55e' }}>ONLINE</span> // BLOCK: LATEST // BATTLE_INIT_V4
+            TERMINAL STATUS: <span style={{ color: '#22c55e' }}>ONLINE</span> // BLOCK: LATEST // ARBITRUM_SEPOLIA
           </p>
         </div>
       </div>
