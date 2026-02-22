@@ -5,38 +5,33 @@ import { formatAddress, formatUSD } from '../lib/utils';
 import {
   useBattleCount,
   useActiveBattles,
-  useRangeBattles,
-  useFeeBattles,
+  useBattles,
 } from '../hooks/useBattleVault';
+import { usePlayersStats } from '../hooks/useStylus';
+import { BattleStatus } from '../types';
+import type { Battle } from '../types';
+import type { Address } from 'viem';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 export default function Leaderboard() {
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
 
-  // Get total battle counts
-  const { data: rangeBattleCount, isLoading: loadingRange } = useBattleCount('range');
-  const { data: feeBattleCount, isLoading: loadingFee } = useBattleCount('fee');
-  const { data: rangeActiveIds } = useActiveBattles('range');
-  const { data: feeActiveIds } = useActiveBattles('fee');
+  // Get total battle count
+  const { data: battleCountData, isLoading: loadingCount } = useBattleCount();
+  const { data: activeIds } = useActiveBattles();
 
-  const rangeCount = rangeBattleCount ? Number(rangeBattleCount as bigint) : 0;
-  const feeCount = feeBattleCount ? Number(feeBattleCount as bigint) : 0;
+  const totalCount = battleCountData ? Number(battleCountData as bigint) : 0;
 
   // Generate all battle IDs to fetch
-  const allRangeIds = useMemo(() => {
-    return Array.from({ length: rangeCount }, (_, i) => BigInt(i));
-  }, [rangeCount]);
-
-  const allFeeIds = useMemo(() => {
-    return Array.from({ length: feeCount }, (_, i) => BigInt(i));
-  }, [feeCount]);
+  const allBattleIds = useMemo(() => {
+    return Array.from({ length: totalCount }, (_, i) => BigInt(i));
+  }, [totalCount]);
 
   // Multicall fetch all battles
-  const { data: allRangeBattles, isLoading: loadingRangeBattles } = useRangeBattles(allRangeIds);
-  const { data: allFeeBattles, isLoading: loadingFeeBattles } = useFeeBattles(allFeeIds);
+  const { data: allBattleResults, isLoading: loadingBattles } = useBattles(allBattleIds);
 
-  const isLoading = loadingRange || loadingFee || loadingRangeBattles || loadingFeeBattles;
+  const isLoading = loadingCount || loadingBattles;
 
   // Aggregate per-address stats
   type GladiatorStats = {
@@ -59,61 +54,29 @@ export default function Leaderboard() {
 
     let resolved = 0;
 
-    // Process range battles
-    if (allRangeBattles) {
-      allRangeBattles.forEach((r) => {
+    if (allBattleResults) {
+      allBattleResults.forEach((r) => {
         if (r.status === 'success' && r.result) {
-          const [creator, opponent, winner, , , , , totalValueUSD, isResolved] = r.result as [string, string, string, bigint, bigint, bigint, bigint, bigint, boolean, string];
+          const b = r.result as Battle;
+          const isResolved = b.status === BattleStatus.RESOLVED;
+          const isActive = b.status === BattleStatus.ACTIVE || b.status === BattleStatus.EXPIRED;
 
-          // Track creator
-          if (creator !== ZERO_ADDRESS) {
-            const cs = getOrCreate(creator.toLowerCase());
-            if (!isResolved) cs.activeBattles++;
+          if (b.creator !== ZERO_ADDRESS) {
+            const cs = getOrCreate(b.creator.toLowerCase());
+            if (isActive) cs.activeBattles++;
           }
-          // Track opponent
-          if (opponent !== ZERO_ADDRESS) {
-            const os = getOrCreate(opponent.toLowerCase());
-            if (!isResolved) os.activeBattles++;
+          if (b.opponent !== ZERO_ADDRESS) {
+            const os = getOrCreate(b.opponent.toLowerCase());
+            if (isActive) os.activeBattles++;
           }
 
-          if (isResolved && winner !== ZERO_ADDRESS) {
+          if (isResolved && b.winner !== ZERO_ADDRESS) {
             resolved++;
-            const ws = getOrCreate(winner.toLowerCase());
+            const ws = getOrCreate(b.winner.toLowerCase());
             ws.wins++;
-            ws.totalValue += totalValueUSD;
+            ws.totalValue += b.creatorValueUSD;
 
-            const loser = winner.toLowerCase() === creator.toLowerCase() ? opponent : creator;
-            if (loser !== ZERO_ADDRESS) {
-              const ls = getOrCreate(loser.toLowerCase());
-              ls.losses++;
-            }
-          }
-        }
-      });
-    }
-
-    // Process fee battles
-    if (allFeeBattles) {
-      allFeeBattles.forEach((r) => {
-        if (r.status === 'success' && r.result) {
-          const [creator, opponent, winner, , , , , creatorLPValue, , isResolved] = r.result as [string, string, string, bigint, bigint, bigint, bigint, bigint, bigint, boolean, string];
-
-          if (creator !== ZERO_ADDRESS) {
-            const cs = getOrCreate(creator.toLowerCase());
-            if (!isResolved) cs.activeBattles++;
-          }
-          if (opponent !== ZERO_ADDRESS) {
-            const os = getOrCreate(opponent.toLowerCase());
-            if (!isResolved) os.activeBattles++;
-          }
-
-          if (isResolved && winner !== ZERO_ADDRESS) {
-            resolved++;
-            const ws = getOrCreate(winner.toLowerCase());
-            ws.wins++;
-            ws.totalValue += creatorLPValue;
-
-            const loser = winner.toLowerCase() === creator.toLowerCase() ? opponent : creator;
+            const loser = b.winner.toLowerCase() === b.creator.toLowerCase() ? b.opponent : b.creator;
             if (loser !== ZERO_ADDRESS) {
               const ls = getOrCreate(loser.toLowerCase());
               ls.losses++;
@@ -126,7 +89,6 @@ export default function Leaderboard() {
     const sorted = Array.from(stats.values())
       .filter((s) => s.wins + s.losses > 0)
       .sort((a, b) => {
-        // Primary: wins desc, secondary: win rate desc, tertiary: total value desc
         if (b.wins !== a.wins) return b.wins - a.wins;
         const aRate = a.wins / (a.wins + a.losses);
         const bRate = b.wins / (b.wins + b.losses);
@@ -140,10 +102,30 @@ export default function Leaderboard() {
       totalResolved: resolved,
       uniqueAddresses: stats.size,
     };
-  }, [allRangeBattles, allFeeBattles]);
+  }, [allBattleResults]);
 
-  const totalBattles = rangeCount + feeCount;
-  const totalActive = ((rangeActiveIds as bigint[]) ?? []).length + ((feeActiveIds as bigint[]) ?? []).length;
+  const totalActive = ((activeIds as bigint[]) ?? []).length;
+
+  // Fetch on-chain ELO from Stylus Leaderboard for all gladiators
+  const gladiatorAddresses = useMemo(
+    () => gladiators.map((g) => g.address as Address),
+    [gladiators],
+  );
+  const { data: stylusStats } = usePlayersStats(gladiatorAddresses);
+
+  // Map address -> ELO
+  const eloMap = useMemo(() => {
+    const map = new Map<string, bigint>();
+    if (stylusStats) {
+      stylusStats.forEach((r, i) => {
+        if (r.status === 'success' && r.result) {
+          const [elo] = r.result as readonly [bigint, bigint, bigint, bigint, bigint];
+          map.set(gladiatorAddresses[i].toLowerCase(), elo);
+        }
+      });
+    }
+    return map;
+  }, [stylusStats, gladiatorAddresses]);
 
   const getBadge = (rank: number, wins: number) => {
     if (rank === 1) return { label: 'LEGEND', color: '#ed7f2f' };
@@ -161,7 +143,7 @@ export default function Leaderboard() {
           <span className="gradient-text-magenta italic">ARENA RANKINGS</span>
         </h1>
         <p className="text-xs sm:text-sm tracking-[0.3em] text-gray-500 mb-12 uppercase font-mono">
-          On-chain leaderboard from Uniswap V4 LP Battles
+          On-chain leaderboard from Multi-DEX LP Battles
         </p>
 
         {/* Stats Cards */}
@@ -182,7 +164,7 @@ export default function Leaderboard() {
               TOTAL BATTLES
             </p>
             <p className="text-xl sm:text-2xl font-black" style={{ color: '#42c7e6' }}>
-              {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : totalBattles}
+              {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : totalCount}
             </p>
           </div>
           <div
@@ -250,13 +232,14 @@ export default function Leaderboard() {
             <div
               className="grid px-4 py-3"
               style={{
-                gridTemplateColumns: '60px 1fr 120px 140px 120px 100px',
+                gridTemplateColumns: '60px 1fr 80px 120px 140px 100px 100px',
                 background: 'rgba(10, 10, 10, 0.95)',
                 borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
               }}
             >
               <span className="text-xs font-mono font-bold tracking-wider text-gray-400">RANK</span>
               <span className="text-xs font-mono font-bold tracking-wider text-gray-400">GLADIATOR</span>
+              <span className="text-xs font-mono font-bold tracking-wider text-gray-400">ELO</span>
               <span className="text-xs font-mono font-bold tracking-wider text-gray-400">WIN/LOSS</span>
               <span className="text-xs font-mono font-bold tracking-wider text-gray-400">TOTAL VALUE</span>
               <span className="text-xs font-mono font-bold tracking-wider text-gray-400">WIN RATE</span>
@@ -277,7 +260,7 @@ export default function Leaderboard() {
                     key={g.address}
                     className="grid items-center px-4 py-4 transition-colors"
                     style={{
-                      gridTemplateColumns: '60px 1fr 120px 140px 120px 100px',
+                      gridTemplateColumns: '60px 1fr 80px 120px 140px 100px 100px',
                       background:
                         hoveredRow === rank
                           ? 'rgba(237, 127, 47, 0.05)'
@@ -287,16 +270,14 @@ export default function Leaderboard() {
                     onMouseEnter={() => setHoveredRow(rank)}
                     onMouseLeave={() => setHoveredRow(null)}
                   >
-                    {/* Rank */}
                     <span className="text-lg font-mono font-bold text-gray-300 flex items-center gap-1.5">
                       {String(rank).padStart(2, '0')}
                       {rank === 1 && <span className="text-yellow-400 text-base">&#9733;</span>}
                     </span>
 
-                    {/* Address + Badge */}
                     <div className="flex items-center gap-2">
                       <a
-                        href={`https://sepolia.etherscan.io/address/${g.address}`}
+                        href={`https://sepolia.arbiscan.io/address/${g.address}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="font-mono font-medium hover:underline"
@@ -318,19 +299,20 @@ export default function Leaderboard() {
                       )}
                     </div>
 
-                    {/* Win/Loss */}
+                    <span className="font-mono text-sm font-bold" style={{ color: '#a855f7' }}>
+                      {eloMap.get(g.address) ? Number(eloMap.get(g.address)!).toString() : '--'}
+                    </span>
+
                     <span className="font-mono text-sm text-gray-400">
                       <span className="text-white">{g.wins}</span>
                       {' / '}
                       <span className="text-gray-600">{g.losses}</span>
                     </span>
 
-                    {/* Total Value */}
                     <span className="font-mono text-sm font-semibold text-white">
                       {formatUSD(g.totalValue)}
                     </span>
 
-                    {/* Win Rate */}
                     <span>
                       <span
                         className="inline-block font-mono text-xs font-bold px-2.5 py-1 rounded"
@@ -344,7 +326,6 @@ export default function Leaderboard() {
                       </span>
                     </span>
 
-                    {/* Active Battles */}
                     <span className="font-mono text-sm text-gray-400">
                       {g.activeBattles > 0 ? (
                         <span className="flex items-center gap-1.5">
@@ -393,7 +374,7 @@ export default function Leaderboard() {
         {/* Terminal Status Footer */}
         <div className="mt-16 text-center">
           <p className="text-xs font-mono text-gray-600 tracking-wider">
-            TERMINAL STATUS: <span style={{ color: '#22c55e' }}>ONLINE</span> // BATTLES: {totalBattles} // ARENA_RANKINGS_V4
+            TERMINAL STATUS: <span style={{ color: '#22c55e' }}>ONLINE</span> // BATTLES: {totalCount} // ARENA_RANKINGS // ARBITRUM SEPOLIA
           </p>
         </div>
       </div>
