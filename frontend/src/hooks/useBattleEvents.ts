@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePublicClient } from 'wagmi';
-import { sepolia } from 'wagmi/chains';
+import { arbitrumSepolia } from 'wagmi/chains';
 import { type Log } from 'viem';
-import { RANGE_VAULT_ABI, FEE_VAULT_ABI, getVaultAddress } from '../lib/contracts';
+import { CONTRACTS, BATTLE_ARENA_ABI } from '../lib/contracts';
 import { formatAddress } from '../lib/utils';
-import type { VaultType } from '../types';
+import { dexTypeName } from '../types';
 
 export interface BattleEvent {
   timestamp: number;
@@ -15,15 +15,11 @@ export interface BattleEvent {
   type: 'system' | 'creator' | 'opponent' | 'info';
 }
 
-function getAbi(vaultType: VaultType) {
-  return vaultType === 'range' ? RANGE_VAULT_ABI : FEE_VAULT_ABI;
-}
+// Lookback ~500k blocks (~7 days on Arbitrum at ~0.25s/block)
+const BLOCK_LOOKBACK = 500000n;
 
-// Lookback ~50k blocks (~7 days on Sepolia at ~12s/block)
-const BLOCK_LOOKBACK = 50000n;
-
-export function useBattleEvents(battleId: bigint | undefined, vaultType: VaultType) {
-  const client = usePublicClient({ chainId: sepolia.id });
+export function useBattleEvents(battleId: bigint | undefined) {
+  const client = usePublicClient({ chainId: arbitrumSepolia.id });
   const [events, setEvents] = useState<BattleEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -32,15 +28,15 @@ export function useBattleEvents(battleId: bigint | undefined, vaultType: VaultTy
 
     setIsLoading(true);
     try {
-      const address = getVaultAddress(vaultType);
-      const abi = getAbi(vaultType);
+      const address = CONTRACTS.BATTLE_ARENA;
+      const abi = BATTLE_ARENA_ABI;
 
       // Get current block and calculate a safe lookback range
       const currentBlock = await client.getBlockNumber();
       const fromBlock = currentBlock > BLOCK_LOOKBACK ? currentBlock - BLOCK_LOOKBACK : 0n;
 
-      // Fetch all three event types for this battleId
-      const [createdLogs, joinedLogs, resolvedLogs] = await Promise.all([
+      // Fetch all event types for this battleId
+      const [createdLogs, joinedLogs, resolvedLogs, statusLogs] = await Promise.all([
         client.getContractEvents({
           address,
           abi,
@@ -62,10 +58,17 @@ export function useBattleEvents(battleId: bigint | undefined, vaultType: VaultTy
           args: { battleId },
           fromBlock,
         }).catch((e) => { console.warn('BattleResolved fetch failed:', e); return [] as Log[]; }),
+        client.getContractEvents({
+          address,
+          abi,
+          eventName: 'BattleStatusUpdated',
+          args: { battleId },
+          fromBlock,
+        }).catch((e) => { console.warn('BattleStatusUpdated fetch failed:', e); return [] as Log[]; }),
       ]);
 
       // Collect unique block numbers
-      const allLogs = [...createdLogs, ...joinedLogs, ...resolvedLogs];
+      const allLogs = [...createdLogs, ...joinedLogs, ...resolvedLogs, ...statusLogs];
       const blockNumbers = [...new Set(allLogs.map((l) => l.blockNumber!))];
 
       // Fetch block timestamps
@@ -88,7 +91,7 @@ export function useBattleEvents(battleId: bigint | undefined, vaultType: VaultTy
           blockNumber: log.blockNumber!,
           txHash: log.transactionHash!,
           eventName: 'BattleCreated',
-          message: `Battle created by ${formatAddress(args.creator, 6)} with position #${args.tokenId?.toString()}`,
+          message: `Battle created by ${formatAddress(args.creator, 6)} via ${dexTypeName(Number(args.dexType))} with position #${args.tokenId?.toString()}`,
           type: 'system',
         });
       }
@@ -102,7 +105,7 @@ export function useBattleEvents(battleId: bigint | undefined, vaultType: VaultTy
           blockNumber: log.blockNumber!,
           txHash: log.transactionHash!,
           eventName: 'BattleJoined',
-          message: `${formatAddress(args.opponent, 6)} joined with position #${args.tokenId?.toString()}`,
+          message: `${formatAddress(args.opponent, 6)} joined via ${dexTypeName(Number(args.dexType))} with position #${args.tokenId?.toString()}`,
           type: 'opponent',
         });
       }
@@ -121,6 +124,20 @@ export function useBattleEvents(battleId: bigint | undefined, vaultType: VaultTy
         });
       }
 
+      // Parse BattleStatusUpdated
+      for (const log of statusLogs) {
+        const args = (log as any).args;
+        const ts = blockTimestamps.get(log.blockNumber!) || 0;
+        parsedEvents.push({
+          timestamp: ts,
+          blockNumber: log.blockNumber!,
+          txHash: log.transactionHash!,
+          eventName: 'BattleStatusUpdated',
+          message: `Status updated — Creator ${args.creatorInRange ? 'IN' : 'OUT'} range, Opponent ${args.opponentInRange ? 'IN' : 'OUT'} range`,
+          type: 'info',
+        });
+      }
+
       // Sort by timestamp ascending
       parsedEvents.sort((a, b) => a.timestamp - b.timestamp);
       setEvents(parsedEvents);
@@ -129,7 +146,7 @@ export function useBattleEvents(battleId: bigint | undefined, vaultType: VaultTy
     } finally {
       setIsLoading(false);
     }
-  }, [client, battleId, vaultType]);
+  }, [client, battleId]);
 
   // Initial fetch
   useEffect(() => {

@@ -1,169 +1,92 @@
 import { useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { sepolia } from 'wagmi/chains';
+import { arbitrumSepolia } from 'wagmi/chains';
 import type { Address } from 'viem';
-import {
-  CONTRACTS,
-  RANGE_VAULT_ABI,
-  FEE_VAULT_ABI,
-  getVaultAddress,
-} from '../lib/contracts';
-import type { VaultType } from '../types';
-
-function getAbi(vaultType: VaultType) {
-  return vaultType === 'range' ? RANGE_VAULT_ABI : FEE_VAULT_ABI;
-}
+import { CONTRACTS, BATTLE_ARENA_ABI } from '../lib/contracts';
+import { BattleStatus } from '../types';
 
 // ============ Read Hooks ============
 
-/** Get total battle count for a vault */
-export function useBattleCount(vaultType: VaultType) {
+/** Get total battle count */
+export function useBattleCount() {
   return useReadContract({
-    address: getVaultAddress(vaultType),
-    abi: getAbi(vaultType),
-    functionName: 'battleIdCounter',
-    chainId: sepolia.id,
+    address: CONTRACTS.BATTLE_ARENA,
+    abi: BATTLE_ARENA_ABI,
+    functionName: 'getBattleCount',
+    chainId: arbitrumSepolia.id,
   });
 }
 
-/** Get all active (unresolved) battle IDs */
-export function useActiveBattles(vaultType: VaultType) {
+/** Get battle IDs by status (PENDING=0, ACTIVE=1, EXPIRED=2, RESOLVED=3) */
+export function useBattlesByStatus(status: BattleStatus) {
   return useReadContract({
-    address: getVaultAddress(vaultType),
-    abi: getAbi(vaultType),
-    functionName: 'getActiveBattles',
-    chainId: sepolia.id,
+    address: CONTRACTS.BATTLE_ARENA,
+    abi: BATTLE_ARENA_ABI,
+    functionName: 'getBattlesByStatus',
+    args: [status],
+    chainId: arbitrumSepolia.id,
   });
 }
 
-/** Get battles waiting for an opponent */
-export function usePendingBattles(vaultType: VaultType) {
-  return useReadContract({
-    address: getVaultAddress(vaultType),
-    abi: getAbi(vaultType),
-    functionName: 'getPendingBattles',
-    chainId: sepolia.id,
-  });
+/** Get all active battle IDs */
+export function useActiveBattles() {
+  return useBattlesByStatus(BattleStatus.ACTIVE);
 }
 
-/** Get a single battle's details from the Range vault */
-export function useRangeBattle(battleId: bigint | undefined) {
+/** Get all pending (joinable) battle IDs */
+export function usePendingBattles() {
+  return useBattlesByStatus(BattleStatus.PENDING);
+}
+
+/** Get all expired battle IDs */
+export function useExpiredBattles() {
+  return useBattlesByStatus(BattleStatus.EXPIRED);
+}
+
+/** Get a single battle's details */
+export function useBattle(battleId: bigint | undefined) {
   return useReadContract({
-    address: CONTRACTS.RANGE_VAULT,
-    abi: RANGE_VAULT_ABI,
+    address: CONTRACTS.BATTLE_ARENA,
+    abi: BATTLE_ARENA_ABI,
     functionName: 'getBattle',
     args: battleId !== undefined ? [battleId] : undefined,
-    chainId: sepolia.id,
+    chainId: arbitrumSepolia.id,
     query: { enabled: battleId !== undefined },
   });
 }
 
-/** Get a single battle's details from the Fee vault */
-export function useFeeBattle(battleId: bigint | undefined) {
+/** Check if a battle has expired */
+export function useIsBattleExpired(battleId: bigint | undefined) {
   return useReadContract({
-    address: CONTRACTS.FEE_VAULT,
-    abi: FEE_VAULT_ABI,
-    functionName: 'getBattle',
+    address: CONTRACTS.BATTLE_ARENA,
+    abi: BATTLE_ARENA_ABI,
+    functionName: 'isBattleExpired',
     args: battleId !== undefined ? [battleId] : undefined,
-    chainId: sepolia.id,
+    chainId: arbitrumSepolia.id,
     query: { enabled: battleId !== undefined },
   });
 }
 
-/** Get battle status string */
-export function useBattleStatus(battleId: bigint | undefined, vaultType: VaultType) {
+/** Get a player's battle IDs */
+export function usePlayerBattles(player: Address | undefined) {
   return useReadContract({
-    address: getVaultAddress(vaultType),
-    abi: getAbi(vaultType),
-    functionName: 'getBattleStatus',
-    args: battleId !== undefined ? [battleId] : undefined,
-    chainId: sepolia.id,
-    query: { enabled: battleId !== undefined },
+    address: CONTRACTS.BATTLE_ARENA,
+    abi: BATTLE_ARENA_ABI,
+    functionName: 'getPlayerBattles',
+    args: player ? [player] : undefined,
+    chainId: arbitrumSepolia.id,
+    query: { enabled: !!player },
   });
 }
 
-/** Get time remaining for a battle */
-export function useTimeRemaining(battleId: bigint | undefined, vaultType: VaultType) {
-  return useReadContract({
-    address: getVaultAddress(vaultType),
-    abi: getAbi(vaultType),
-    functionName: 'getTimeRemaining',
-    args: battleId !== undefined ? [battleId] : undefined,
-    chainId: sepolia.id,
-    query: { enabled: battleId !== undefined },
-  });
-}
-
-/** Get current range performance (Range vault only) - auto-refreshes every 15s */
-export function useCurrentPerformance(battleId: bigint | undefined) {
-  return useReadContract({
-    address: CONTRACTS.RANGE_VAULT,
-    abi: RANGE_VAULT_ABI,
-    functionName: 'getCurrentPerformance',
-    args: battleId !== undefined ? [battleId] : undefined,
-    chainId: sepolia.id,
-    query: { enabled: battleId !== undefined, refetchInterval: 15000 },
-  });
-}
-
-/** Get current fee performance (Fee vault only) - auto-refreshes every 15s */
-export function useCurrentFeePerformance(battleId: bigint | undefined) {
-  return useReadContract({
-    address: CONTRACTS.FEE_VAULT,
-    abi: FEE_VAULT_ABI,
-    functionName: 'getCurrentFeePerformance',
-    args: battleId !== undefined ? [battleId] : undefined,
-    chainId: sepolia.id,
-    query: { enabled: battleId !== undefined, refetchInterval: 15000 },
-  });
-}
-
-/** Get a user's battles */
-export function useUserBattles(user: Address | undefined, vaultType: VaultType) {
-  return useReadContract({
-    address: getVaultAddress(vaultType),
-    abi: getAbi(vaultType),
-    functionName: 'getUserBattles',
-    args: user ? [user] : undefined,
-    chainId: sepolia.id,
-    query: { enabled: !!user },
-  });
-}
-
-/** Get formatted USD value for a battle */
-export function useBattleUSDValue(battleId: bigint | undefined, vaultType: VaultType) {
-  return useReadContract({
-    address: getVaultAddress(vaultType),
-    abi: getAbi(vaultType),
-    functionName: 'getBattleUSDValue',
-    args: battleId !== undefined ? [battleId] : undefined,
-    chainId: sepolia.id,
-    query: { enabled: battleId !== undefined },
-  });
-}
-
-/** Fetch multiple battles at once from Range vault */
-export function useRangeBattles(battleIds: readonly bigint[]) {
+/** Fetch multiple battles at once */
+export function useBattles(battleIds: readonly bigint[]) {
   return useReadContracts({
     contracts: battleIds.map((id) => ({
-      address: CONTRACTS.RANGE_VAULT,
-      abi: RANGE_VAULT_ABI,
+      address: CONTRACTS.BATTLE_ARENA,
+      abi: BATTLE_ARENA_ABI,
       functionName: 'getBattle' as const,
       args: [id] as const,
-      chainId: sepolia.id,
-    })),
-    query: { enabled: battleIds.length > 0 },
-  });
-}
-
-/** Fetch multiple battles at once from Fee vault */
-export function useFeeBattles(battleIds: readonly bigint[]) {
-  return useReadContracts({
-    contracts: battleIds.map((id) => ({
-      address: CONTRACTS.FEE_VAULT,
-      abi: FEE_VAULT_ABI,
-      functionName: 'getBattle' as const,
-      args: [id] as const,
-      chainId: sepolia.id,
+      chainId: arbitrumSepolia.id,
     })),
     query: { enabled: battleIds.length > 0 },
   });
@@ -172,17 +95,17 @@ export function useFeeBattles(battleIds: readonly bigint[]) {
 // ============ Write Hooks ============
 
 /** Create a new battle */
-export function useCreateBattle(vaultType: VaultType) {
+export function useCreateBattle() {
   const { writeContract, data: hash, isPending, error } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
-  const createBattle = (tokenId: bigint, duration: bigint) => {
+  const createBattle = (dexType: number, tokenId: bigint, duration: bigint, battleType: number) => {
     writeContract({
-      address: getVaultAddress(vaultType),
-      abi: getAbi(vaultType),
+      address: CONTRACTS.BATTLE_ARENA,
+      abi: BATTLE_ARENA_ABI,
       functionName: 'createBattle',
-      args: [tokenId, duration],
-      chainId: sepolia.id,
+      args: [dexType, tokenId, duration, battleType],
+      chainId: arbitrumSepolia.id,
     });
   };
 
@@ -190,17 +113,17 @@ export function useCreateBattle(vaultType: VaultType) {
 }
 
 /** Join an existing battle */
-export function useJoinBattle(vaultType: VaultType) {
+export function useJoinBattle() {
   const { writeContract, data: hash, isPending, error } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
-  const joinBattle = (battleId: bigint, tokenId: bigint) => {
+  const joinBattle = (battleId: bigint, dexType: number, tokenId: bigint) => {
     writeContract({
-      address: getVaultAddress(vaultType),
-      abi: getAbi(vaultType),
+      address: CONTRACTS.BATTLE_ARENA,
+      abi: BATTLE_ARENA_ABI,
       functionName: 'joinBattle',
-      args: [battleId, tokenId],
-      chainId: sepolia.id,
+      args: [battleId, dexType, tokenId],
+      chainId: arbitrumSepolia.id,
     });
   };
 
@@ -208,17 +131,17 @@ export function useJoinBattle(vaultType: VaultType) {
 }
 
 /** Resolve a completed battle */
-export function useResolveBattle(vaultType: VaultType) {
+export function useResolveBattle() {
   const { writeContract, data: hash, isPending, error } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
   const resolveBattle = (battleId: bigint) => {
     writeContract({
-      address: getVaultAddress(vaultType),
-      abi: getAbi(vaultType),
+      address: CONTRACTS.BATTLE_ARENA,
+      abi: BATTLE_ARENA_ABI,
       functionName: 'resolveBattle',
       args: [battleId],
-      chainId: sepolia.id,
+      chainId: arbitrumSepolia.id,
     });
   };
 
