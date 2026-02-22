@@ -106,6 +106,7 @@ export function useCreateBattle() {
       functionName: 'createBattle',
       args: [dexType, tokenId, duration, battleType],
       chainId: arbitrumSepolia.id,
+      maxFeePerGas: 100000000n,
     });
   };
 
@@ -124,6 +125,7 @@ export function useJoinBattle() {
       functionName: 'joinBattle',
       args: [battleId, dexType, tokenId],
       chainId: arbitrumSepolia.id,
+      maxFeePerGas: 100000000n,
     });
   };
 
@@ -142,6 +144,7 @@ export function useUpdateBattleStatus() {
       functionName: 'updateBattleStatus',
       args: [battleId],
       chainId: arbitrumSepolia.id,
+      maxFeePerGas: 100000000n,
     });
   };
 
@@ -160,6 +163,7 @@ export function useResolveBattle() {
       functionName: 'resolveBattle',
       args: [battleId],
       chainId: arbitrumSepolia.id,
+      maxFeePerGas: 100000000n,
     });
   };
 

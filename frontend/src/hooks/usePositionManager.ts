@@ -198,6 +198,7 @@ export function useApprovePosition() {
       functionName: 'approve',
       args: [to, tokenId],
       chainId: arbitrumSepolia.id,
+      maxFeePerGas: 100000000n,
     });
   };
 
@@ -216,6 +217,7 @@ export function useSetApprovalForAll() {
       functionName: 'setApprovalForAll',
       args: [operator, approved],
       chainId: arbitrumSepolia.id,
+      maxFeePerGas: 100000000n,
     });
   };
 
