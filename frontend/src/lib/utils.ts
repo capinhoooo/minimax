@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { BattleStatus } from '../types';
 
 // Merge Tailwind classes
 export function cn(...inputs: ClassValue[]) {
@@ -63,53 +64,46 @@ export function formatDuration(seconds: number): string {
   }
 }
 
-// Get battle status color
-export function getStatusColor(status: string): string {
-  switch (status.toLowerCase()) {
-    case 'open':
-    case 'waiting_for_opponent':
+// Get battle status color (numeric status)
+export function getStatusColor(status: number): string {
+  switch (status) {
+    case BattleStatus.PENDING:
       return 'text-accent-green';
-    case 'ongoing':
-    case 'active':
+    case BattleStatus.ACTIVE:
       return 'text-accent-blue';
-    case 'ready_to_resolve':
+    case BattleStatus.EXPIRED:
       return 'text-accent-yellow';
-    case 'resolved':
-    case 'completed':
+    case BattleStatus.RESOLVED:
       return 'text-gray-400';
     default:
       return 'text-gray-400';
   }
 }
 
-// Get battle status badge class
-export function getStatusBadgeClass(status: string): string {
-  switch (status.toLowerCase()) {
-    case 'open':
-    case 'waiting_for_opponent':
+// Get battle status badge class (numeric status)
+export function getStatusBadgeClass(status: number): string {
+  switch (status) {
+    case BattleStatus.PENDING:
       return 'status-open';
-    case 'ongoing':
-    case 'active':
+    case BattleStatus.ACTIVE:
       return 'status-ongoing';
-    case 'ready_to_resolve':
+    case BattleStatus.EXPIRED:
       return 'status-ready';
-    case 'resolved':
-    case 'completed':
+    case BattleStatus.RESOLVED:
       return 'status-resolved';
     default:
       return 'status-resolved';
   }
 }
 
-// Format status for display
-export function formatStatus(status: string): string {
-  switch (status.toLowerCase()) {
-    case 'waiting_for_opponent':
-      return 'Open';
-    case 'ready_to_resolve':
-      return 'Ready';
-    default:
-      return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+// Format status for display (numeric status)
+export function formatStatus(status: number): string {
+  switch (status) {
+    case BattleStatus.PENDING: return 'Open';
+    case BattleStatus.ACTIVE: return 'Active';
+    case BattleStatus.EXPIRED: return 'Expired';
+    case BattleStatus.RESOLVED: return 'Resolved';
+    default: return 'Unknown';
   }
 }
 
@@ -129,25 +123,13 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
-// Get explorer URL
-export function getExplorerUrl(hash: string, type: 'tx' | 'address' = 'tx', chainId = 11155111): string {
+// Get explorer URL (default: Arbitrum Sepolia)
+export function getExplorerUrl(hash: string, type: 'tx' | 'address' = 'tx', chainId = 421614): string {
   const explorers: Record<number, string> = {
-    // Mainnets
-    1: 'https://etherscan.io',
-    8453: 'https://basescan.org',
-    42161: 'https://arbiscan.io',
-    137: 'https://polygonscan.com',
-    10: 'https://optimistic.etherscan.io',
-    // Testnets
-    11155111: 'https://sepolia.etherscan.io',
-    84532: 'https://sepolia.basescan.org',
     421614: 'https://sepolia.arbiscan.io',
-    11155420: 'https://sepolia-optimism.etherscan.io',
-    80002: 'https://amoy.polygonscan.com',
-    43113: 'https://testnet.snowtrace.io',
-    59141: 'https://sepolia.lineascan.build',
+    42161: 'https://arbiscan.io',
   };
 
-  const baseUrl = explorers[chainId] || explorers[11155111];
+  const baseUrl = explorers[chainId] || explorers[421614];
   return `${baseUrl}/${type}/${hash}`;
 }

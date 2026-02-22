@@ -1,94 +1,291 @@
 import { type Address } from 'viem';
 
-// ============ CCTP V2 Testnet Config ============
+// ============ BattleArena Contract (Arbitrum Sepolia) ============
 
-export interface CctpChain {
-  chainId: number;
-  name: string;
-  domain: number;
-  usdc: Address;
-  tokenMessenger: Address;
-  messageTransmitter: Address;
-  rpcUrl: string;
-}
+export const CONTRACTS = {
+  BATTLE_ARENA: '0x478505eb07B3C8943A642E51F066bcF8aC8ed51d' as Address,
+  UNISWAP_V4_ADAPTER: '0x244C49E7986feC5BaD7C567d588B9262eF5e0604' as Address,
+  CAMELOT_ADAPTER: '0x5442068A4Cd117F26047c89f0A87D635112c886E' as Address,
+  SCORING_ENGINE: '0xd34ffbe6d046cb1a3450768664caf97106d18204' as Address,
+  LEADERBOARD: '0x7feb2cf23797fd950380cd9ad4b7d4cad4b3c85b' as Address,
+  POOL_MANAGER: '0xFB3e0C6F74eB1a21CC1Da29aeC80D2Dfe6C9a317' as Address,
+  POSITION_MANAGER: '0xAc631556d3d4019C95769033B5E719dD77124BAc' as Address,
+  WETH: '0x980B62Da83eFf3D4576C647993b0c1D7faf17c73' as Address,
+  USDC: '0xb893E3334D4Bd6C5ba8277Fd559e99Ed683A9FC7' as Address,
+  PERMIT2: '0x000000000022D473030F116dDEE9F6B43aC78BA3' as Address,
+  CAMELOT_NFT_MANAGER: '0x79EA6cB3889fe1FC7490A1C69C7861761d882D4A' as Address,
+  CAMELOT_FACTORY: '0xaA37Bea711D585478E1c04b04707cCb0f10D762a' as Address,
+} as const;
 
-// All CCTP V2 EVM testnets share the same contract addresses
-const CCTP_TOKEN_MESSENGER = '0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA' as Address;
-const CCTP_MESSAGE_TRANSMITTER = '0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275' as Address;
+// ============ BattleArena ABI ============
 
-export const CCTP_CHAINS: CctpChain[] = [
+export const BATTLE_ARENA_ABI = [
+  // Read functions
   {
-    chainId: 11155111,
-    name: 'Ethereum Sepolia',
-    domain: 0,
-    usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' as Address,
-    tokenMessenger: CCTP_TOKEN_MESSENGER,
-    messageTransmitter: CCTP_MESSAGE_TRANSMITTER,
-    rpcUrl: "https://1rpc.sepolia.org",
+    name: 'getBattleCount',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
   },
   {
-    chainId: 43113,
-    name: 'Avalanche Fuji',
-    domain: 1,
-    usdc: '0x5425890298aed601595a70AB815c96711a31Bc65' as Address,
-    tokenMessenger: CCTP_TOKEN_MESSENGER,
-    messageTransmitter: CCTP_MESSAGE_TRANSMITTER,
-    rpcUrl: 'https://api.avax-test.network/ext/bc/C/rpc',
+    name: 'battleCount',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
   },
   {
-    chainId: 11155420,
-    name: 'OP Sepolia',
-    domain: 2,
-    usdc: '0x5fd84259d66Cd46123540766Be93DFE6D43130D7' as Address,
-    tokenMessenger: CCTP_TOKEN_MESSENGER,
-    messageTransmitter: CCTP_MESSAGE_TRANSMITTER,
-    rpcUrl: 'https://sepolia.optimism.io',
+    name: 'activeBattleCount',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
   },
   {
-    chainId: 421614,
-    name: 'Arbitrum Sepolia',
-    domain: 3,
-    usdc: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d' as Address,
-    tokenMessenger: CCTP_TOKEN_MESSENGER,
-    messageTransmitter: CCTP_MESSAGE_TRANSMITTER,
-    rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
+    name: 'getBattlesByStatus',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'status', type: 'uint8' }],
+    outputs: [{ name: '', type: 'uint256[]' }],
   },
   {
-    chainId: 84532,
-    name: 'Base Sepolia',
-    domain: 6,
-    usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e' as Address,
-    tokenMessenger: CCTP_TOKEN_MESSENGER,
-    messageTransmitter: CCTP_MESSAGE_TRANSMITTER,
-    rpcUrl: 'https://sepolia.base.org',
+    name: 'getPlayerBattles',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'player', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256[]' }],
   },
   {
-    chainId: 80002,
-    name: 'Polygon Amoy',
-    domain: 7,
-    usdc: '0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582' as Address,
-    tokenMessenger: CCTP_TOKEN_MESSENGER,
-    messageTransmitter: CCTP_MESSAGE_TRANSMITTER,
-    rpcUrl: 'https://rpc-amoy.polygon.technology',
+    name: 'getBattle',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'battleId', type: 'uint256' }],
+    outputs: [
+      {
+        name: '',
+        type: 'tuple',
+        components: [
+          { name: 'creator', type: 'address' },
+          { name: 'opponent', type: 'address' },
+          { name: 'winner', type: 'address' },
+          { name: 'creatorDex', type: 'uint8' },
+          { name: 'opponentDex', type: 'uint8' },
+          { name: 'creatorTokenId', type: 'uint256' },
+          { name: 'opponentTokenId', type: 'uint256' },
+          { name: 'creatorValueUSD', type: 'uint256' },
+          { name: 'opponentValueUSD', type: 'uint256' },
+          { name: 'battleType', type: 'uint8' },
+          { name: 'status', type: 'uint8' },
+          { name: 'startTime', type: 'uint256' },
+          { name: 'duration', type: 'uint256' },
+          { name: 'token0', type: 'address' },
+          { name: 'token1', type: 'address' },
+          { name: 'creatorInRangeTime', type: 'uint256' },
+          { name: 'opponentInRangeTime', type: 'uint256' },
+          { name: 'lastUpdateTime', type: 'uint256' },
+          { name: 'creatorStartFeeGrowth0', type: 'uint256' },
+          { name: 'creatorStartFeeGrowth1', type: 'uint256' },
+          { name: 'opponentStartFeeGrowth0', type: 'uint256' },
+          { name: 'opponentStartFeeGrowth1', type: 'uint256' },
+          { name: 'creatorLiquidity', type: 'uint128' },
+          { name: 'opponentLiquidity', type: 'uint128' },
+        ],
+      },
+    ],
   },
   {
-    chainId: 59141,
-    name: 'Linea Sepolia',
-    domain: 11,
-    usdc: '0xFEce4462D57bD51A6A552365A011b95f0E16d9B7' as Address,
-    tokenMessenger: CCTP_TOKEN_MESSENGER,
-    messageTransmitter: CCTP_MESSAGE_TRANSMITTER,
-    rpcUrl: 'https://rpc.sepolia.linea.build',
+    name: 'isBattleExpired',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'battleId', type: 'uint256' }],
+    outputs: [{ type: 'bool' }],
   },
-];
+  // Write functions
+  {
+    name: 'createBattle',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'dexType', type: 'uint8' },
+      { name: 'tokenId', type: 'uint256' },
+      { name: 'duration', type: 'uint256' },
+      { name: 'battleType', type: 'uint8' },
+    ],
+    outputs: [{ name: 'battleId', type: 'uint256' }],
+  },
+  {
+    name: 'joinBattle',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'battleId', type: 'uint256' },
+      { name: 'dexType', type: 'uint8' },
+      { name: 'tokenId', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'resolveBattle',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'battleId', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    name: 'updateBattleStatus',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'battleId', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    name: 'emergencyWithdraw',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'battleId', type: 'uint256' }],
+    outputs: [],
+  },
+  // Events
+  {
+    name: 'BattleCreated',
+    type: 'event',
+    inputs: [
+      { name: 'battleId', type: 'uint256', indexed: true },
+      { name: 'creator', type: 'address', indexed: true },
+      { name: 'dexType', type: 'uint8', indexed: false },
+      { name: 'battleType', type: 'uint8', indexed: false },
+      { name: 'tokenId', type: 'uint256', indexed: false },
+      { name: 'duration', type: 'uint256', indexed: false },
+      { name: 'valueUSD', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    name: 'BattleJoined',
+    type: 'event',
+    inputs: [
+      { name: 'battleId', type: 'uint256', indexed: true },
+      { name: 'opponent', type: 'address', indexed: true },
+      { name: 'dexType', type: 'uint8', indexed: false },
+      { name: 'tokenId', type: 'uint256', indexed: false },
+      { name: 'valueUSD', type: 'uint256', indexed: false },
+      { name: 'startTime', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    name: 'BattleResolved',
+    type: 'event',
+    inputs: [
+      { name: 'battleId', type: 'uint256', indexed: true },
+      { name: 'winner', type: 'address', indexed: true },
+      { name: 'resolver', type: 'address', indexed: true },
+      { name: 'winnerReward', type: 'uint256', indexed: false },
+      { name: 'resolverReward', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    name: 'BattleStatusUpdated',
+    type: 'event',
+    inputs: [
+      { name: 'battleId', type: 'uint256', indexed: true },
+      { name: 'creatorInRange', type: 'bool', indexed: false },
+      { name: 'opponentInRange', type: 'bool', indexed: false },
+      { name: 'creatorInRangeTime', type: 'uint256', indexed: false },
+      { name: 'opponentInRangeTime', type: 'uint256', indexed: false },
+    ],
+  },
+] as const;
 
-export const CCTP_ATTESTATION_API = 'https://iris-api-sandbox.circle.com/v1/attestations';
+// ============ Stylus ScoringEngine ABI ============
 
-export function getCctpChain(chainId: number): CctpChain | undefined {
-  return CCTP_CHAINS.find((c) => c.chainId === chainId);
-}
+export const SCORING_ENGINE_ABI = [
+  {
+    name: 'calculateRangeScore',
+    type: 'function',
+    stateMutability: 'pure',
+    inputs: [
+      { name: 'inRangeTime', type: 'uint256' },
+      { name: 'totalTime', type: 'uint256' },
+      { name: 'tickDistance', type: 'uint256' },
+    ],
+    outputs: [{ name: 'score', type: 'uint256' }],
+  },
+  {
+    name: 'calculateFeeScore',
+    type: 'function',
+    stateMutability: 'pure',
+    inputs: [
+      { name: 'feesUSD', type: 'uint256' },
+      { name: 'lpValueUSD', type: 'uint256' },
+      { name: 'duration', type: 'uint256' },
+    ],
+    outputs: [{ name: 'score', type: 'uint256' }],
+  },
+  {
+    name: 'calculateRewards',
+    type: 'function',
+    stateMutability: 'pure',
+    inputs: [
+      { name: 'totalFees', type: 'uint256' },
+      { name: 'resolverBps', type: 'uint256' },
+    ],
+    outputs: [
+      { name: 'winnerAmount', type: 'uint256' },
+      { name: 'resolverAmount', type: 'uint256' },
+    ],
+  },
+  {
+    name: 'determineWinner',
+    type: 'function',
+    stateMutability: 'pure',
+    inputs: [
+      { name: 'scoreA', type: 'uint256' },
+      { name: 'scoreB', type: 'uint256' },
+    ],
+    outputs: [{ name: 'winner', type: 'uint8' }],
+  },
+  {
+    name: 'normalizeCrossDex',
+    type: 'function',
+    stateMutability: 'pure',
+    inputs: [
+      { name: 'rawScore', type: 'uint256' },
+      { name: 'dexType', type: 'uint8' },
+    ],
+    outputs: [{ name: 'normalizedScore', type: 'uint256' }],
+  },
+] as const;
 
-// ============ CCTP ABIs ============
+// ============ Stylus Leaderboard ABI ============
+
+export const LEADERBOARD_ABI = [
+  {
+    name: 'getPlayerStats',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'player', type: 'address' }],
+    outputs: [
+      { name: 'elo', type: 'uint256' },
+      { name: 'wins', type: 'uint256' },
+      { name: 'losses', type: 'uint256' },
+      { name: 'totalBattles', type: 'uint256' },
+      { name: 'totalValueWon', type: 'uint256' },
+    ],
+  },
+  {
+    name: 'recordResult',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'winner', type: 'address' },
+      { name: 'loser', type: 'address' },
+      { name: 'battleValueUSD', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+] as const;
+
+// ============ ERC20 ABI (minimal) ============
 
 export const ERC20_ABI = [
   {
@@ -120,363 +317,8 @@ export const ERC20_ABI = [
   },
 ] as const;
 
-export const TOKEN_MESSENGER_ABI = [
-  {
-    name: 'depositForBurn',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'amount', type: 'uint256' },
-      { name: 'destinationDomain', type: 'uint32' },
-      { name: 'mintRecipient', type: 'bytes32' },
-      { name: 'burnToken', type: 'address' },
-    ],
-    outputs: [{ name: '_nonce', type: 'uint64' }],
-  },
-] as const;
+// ============ ERC721 ABI (for LP positions) ============
 
-export const MESSAGE_TRANSMITTER_ABI = [
-  {
-    name: 'receiveMessage',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'message', type: 'bytes' },
-      { name: 'attestation', type: 'bytes' },
-    ],
-    outputs: [{ name: 'success', type: 'bool' }],
-  },
-  {
-    name: 'MessageSent',
-    type: 'event',
-    inputs: [
-      { name: 'message', type: 'bytes', indexed: false },
-    ],
-  },
-] as const;
-
-// ============ Battle Vault Contracts ============
-
-// Deployed contract addresses (Sepolia Testnet)
-export const CONTRACTS = {
-  RANGE_VAULT: '0x439f2b3Aa592b3676edC412148e9d392E7CA1bAC' as Address,
-  FEE_VAULT: '0xD5EBEbAF3802Ae85c6031c082dbF79f328Eccb00' as Address,
-  POOL_MANAGER: '0xE03A1074c86CFeDd5C142C4F04F1a1536e203543' as Address,
-  POSITION_MANAGER: '0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4' as Address,
-  USDC: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' as Address,
-} as const;
-
-// Helper to get vault address by type
-export function getVaultAddress(type: 'range' | 'fee'): Address {
-  return type === 'range' ? CONTRACTS.RANGE_VAULT : CONTRACTS.FEE_VAULT;
-}
-
-// ============ Range Vault ABI ============
-export const RANGE_VAULT_ABI = [
-  // Read functions
-  {
-    name: 'battleIdCounter',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'getActiveBattles',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: 'battleIds', type: 'uint256[]' }],
-  },
-  {
-    name: 'getPendingBattles',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: 'battleIds', type: 'uint256[]' }],
-  },
-  {
-    name: 'getBattle',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'battleId', type: 'uint256' }],
-    outputs: [
-      { name: 'creator', type: 'address' },
-      { name: 'opponent', type: 'address' },
-      { name: 'winner', type: 'address' },
-      { name: 'creatorTokenId', type: 'uint256' },
-      { name: 'opponentTokenId', type: 'uint256' },
-      { name: 'startTime', type: 'uint256' },
-      { name: 'duration', type: 'uint256' },
-      { name: 'totalValueUSD', type: 'uint256' },
-      { name: 'isResolved', type: 'bool' },
-      { name: 'status', type: 'string' },
-    ],
-  },
-  {
-    name: 'getBattleStatus',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'battleId', type: 'uint256' }],
-    outputs: [{ type: 'string' }],
-  },
-  {
-    name: 'getTimeRemaining',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'battleId', type: 'uint256' }],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'getCurrentPerformance',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'battleId', type: 'uint256' }],
-    outputs: [
-      { name: 'creatorInRange', type: 'bool' },
-      { name: 'opponentInRange', type: 'bool' },
-      { name: 'creatorInRangeTime', type: 'uint256' },
-      { name: 'opponentInRangeTime', type: 'uint256' },
-      { name: 'currentLeader', type: 'address' },
-    ],
-  },
-  {
-    name: 'getUserBattles',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'user', type: 'address' }],
-    outputs: [
-      { name: 'battleIds', type: 'uint256[]' },
-      { name: 'isCreator', type: 'bool[]' },
-    ],
-  },
-  {
-    name: 'getBattleUSDValue',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'battleId', type: 'uint256' }],
-    outputs: [{ type: 'string' }],
-  },
-  // Write functions
-  {
-    name: 'createBattle',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'tokenId', type: 'uint256' },
-      { name: 'duration', type: 'uint256' },
-    ],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'joinBattle',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'battleId', type: 'uint256' },
-      { name: 'tokenId', type: 'uint256' },
-    ],
-    outputs: [],
-  },
-  {
-    name: 'resolveBattle',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'battleId', type: 'uint256' }],
-    outputs: [],
-  },
-  {
-    name: 'updateBattleStatus',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'battleId', type: 'uint256' }],
-    outputs: [],
-  },
-  // Events
-  {
-    name: 'BattleCreated',
-    type: 'event',
-    inputs: [
-      { name: 'battleId', type: 'uint256', indexed: true },
-      { name: 'creator', type: 'address', indexed: true },
-      { name: 'tokenId', type: 'uint256', indexed: false },
-      { name: 'duration', type: 'uint256', indexed: false },
-      { name: 'totalValueUSD', type: 'uint256', indexed: false },
-    ],
-  },
-  {
-    name: 'BattleJoined',
-    type: 'event',
-    inputs: [
-      { name: 'battleId', type: 'uint256', indexed: true },
-      { name: 'opponent', type: 'address', indexed: true },
-      { name: 'tokenId', type: 'uint256', indexed: false },
-      { name: 'startTime', type: 'uint256', indexed: false },
-    ],
-  },
-  {
-    name: 'BattleResolved',
-    type: 'event',
-    inputs: [
-      { name: 'battleId', type: 'uint256', indexed: true },
-      { name: 'winner', type: 'address', indexed: true },
-      { name: 'resolver', type: 'address', indexed: true },
-      { name: 'resolverReward', type: 'uint256', indexed: false },
-    ],
-  },
-] as const;
-
-// ============ Fee Vault ABI ============
-export const FEE_VAULT_ABI = [
-  // Read functions
-  {
-    name: 'battleIdCounter',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'getActiveBattles',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: 'battleIds', type: 'uint256[]' }],
-  },
-  {
-    name: 'getPendingBattles',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: 'battleIds', type: 'uint256[]' }],
-  },
-  {
-    name: 'getBattle',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'battleId', type: 'uint256' }],
-    outputs: [
-      { name: 'creator', type: 'address' },
-      { name: 'opponent', type: 'address' },
-      { name: 'winner', type: 'address' },
-      { name: 'creatorTokenId', type: 'uint256' },
-      { name: 'opponentTokenId', type: 'uint256' },
-      { name: 'startTime', type: 'uint256' },
-      { name: 'duration', type: 'uint256' },
-      { name: 'creatorLPValue', type: 'uint256' },
-      { name: 'opponentLPValue', type: 'uint256' },
-      { name: 'isResolved', type: 'bool' },
-      { name: 'status', type: 'string' },
-    ],
-  },
-  {
-    name: 'getBattleStatus',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'battleId', type: 'uint256' }],
-    outputs: [{ type: 'string' }],
-  },
-  {
-    name: 'getTimeRemaining',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'battleId', type: 'uint256' }],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'getCurrentFeePerformance',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'battleId', type: 'uint256' }],
-    outputs: [
-      { name: 'creatorFeeGrowthUSD', type: 'uint256' },
-      { name: 'opponentFeeGrowthUSD', type: 'uint256' },
-      { name: 'creatorFeeRate', type: 'uint256' },
-      { name: 'opponentFeeRate', type: 'uint256' },
-      { name: 'currentLeader', type: 'address' },
-    ],
-  },
-  {
-    name: 'getUserBattles',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'user', type: 'address' }],
-    outputs: [
-      { name: 'battleIds', type: 'uint256[]' },
-      { name: 'isCreator', type: 'bool[]' },
-    ],
-  },
-  {
-    name: 'getBattleUSDValue',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'battleId', type: 'uint256' }],
-    outputs: [{ type: 'string' }],
-  },
-  // Write functions
-  {
-    name: 'createBattle',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'tokenId', type: 'uint256' },
-      { name: 'duration', type: 'uint256' },
-    ],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'joinBattle',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'battleId', type: 'uint256' },
-      { name: 'tokenId', type: 'uint256' },
-    ],
-    outputs: [],
-  },
-  {
-    name: 'resolveBattle',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'battleId', type: 'uint256' }],
-    outputs: [],
-  },
-  // Events
-  {
-    name: 'BattleCreated',
-    type: 'event',
-    inputs: [
-      { name: 'battleId', type: 'uint256', indexed: true },
-      { name: 'creator', type: 'address', indexed: true },
-      { name: 'tokenId', type: 'uint256', indexed: false },
-      { name: 'duration', type: 'uint256', indexed: false },
-      { name: 'lpValueUSD', type: 'uint256', indexed: false },
-    ],
-  },
-  {
-    name: 'BattleJoined',
-    type: 'event',
-    inputs: [
-      { name: 'battleId', type: 'uint256', indexed: true },
-      { name: 'opponent', type: 'address', indexed: true },
-      { name: 'tokenId', type: 'uint256', indexed: false },
-      { name: 'startTime', type: 'uint256', indexed: false },
-    ],
-  },
-  {
-    name: 'BattleResolved',
-    type: 'event',
-    inputs: [
-      { name: 'battleId', type: 'uint256', indexed: true },
-      { name: 'winner', type: 'address', indexed: true },
-      { name: 'resolver', type: 'address', indexed: true },
-      { name: 'creatorFeeRate', type: 'uint256', indexed: false },
-      { name: 'opponentFeeRate', type: 'uint256', indexed: false },
-    ],
-  },
-] as const;
-
-// ERC721 ABI (for LP positions)
 export const ERC721_ABI = [
   {
     name: 'balanceOf',
@@ -528,5 +370,93 @@ export const ERC721_ABI = [
       { name: 'operator', type: 'address' },
     ],
     outputs: [{ type: 'bool' }],
+  },
+] as const;
+
+// ============ Permit2 ABI ============
+
+export const PERMIT2_ABI = [
+  {
+    name: 'approve',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'token', type: 'address' },
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint160' },
+      { name: 'expiration', type: 'uint48' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'allowance',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'token', type: 'address' },
+      { name: 'spender', type: 'address' },
+    ],
+    outputs: [
+      { name: 'amount', type: 'uint160' },
+      { name: 'expiration', type: 'uint48' },
+      { name: 'nonce', type: 'uint48' },
+    ],
+  },
+] as const;
+
+// ============ V4 PositionManager Mint ABI ============
+
+export const POSITION_MANAGER_MINT_ABI = [
+  {
+    name: 'modifyLiquidities',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'unlockData', type: 'bytes' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'nextTokenId',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+] as const;
+
+// ============ Camelot NFT Position Manager ABI ============
+
+export const CAMELOT_NFT_MANAGER_ABI = [
+  {
+    name: 'mint',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'token0', type: 'address' },
+          { name: 'token1', type: 'address' },
+          { name: 'tickLower', type: 'int24' },
+          { name: 'tickUpper', type: 'int24' },
+          { name: 'amount0Desired', type: 'uint256' },
+          { name: 'amount1Desired', type: 'uint256' },
+          { name: 'amount0Min', type: 'uint256' },
+          { name: 'amount1Min', type: 'uint256' },
+          { name: 'recipient', type: 'address' },
+          { name: 'deadline', type: 'uint256' },
+        ],
+      },
+    ],
+    outputs: [
+      { name: 'tokenId', type: 'uint256' },
+      { name: 'liquidity', type: 'uint128' },
+      { name: 'amount0', type: 'uint256' },
+      { name: 'amount1', type: 'uint256' },
+    ],
   },
 ] as const;
