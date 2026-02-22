@@ -23,8 +23,8 @@ export default function CreateBattle() {
   const [battleType, setBattleType] = useState<BattleType>(BattleType.RANGE);
   const [dexType, setDexType] = useState<DexType>(DexType.UNISWAP_V4);
   const [tokenId, setTokenId] = useState<bigint | null>(null);
-  const [durationAmount, setDurationAmount] = useState('1');
-  const [durationUnit, setDurationUnit] = useState<typeof durationUnits[number]>(durationUnits[2]); // default: hours
+  const [durationAmount, setDurationAmount] = useState('5');
+  const [durationUnit, setDurationUnit] = useState<typeof durationUnits[number]>(durationUnits[1]); // default: 5 minutes
 
   const durationSeconds = Math.floor(Number(durationAmount || 0) * durationUnit.multiplier);
 

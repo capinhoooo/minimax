@@ -18,6 +18,7 @@ import Leaderboard from './pages/Leaderboard';
 import Lobby from './pages/Lobby';
 import Agent from './pages/Agent';
 import Liquidity from './pages/Liquidity';
+import Faucet from './pages/Faucet';
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -46,6 +47,7 @@ function App() {
               <Route path="lobby" element={<Lobby />} />
               <Route path="agent" element={<Agent />} />
               <Route path="liquidity" element={<Liquidity />} />
+              <Route path="faucet" element={<Faucet />} />
               <Route path="profile" element={<Profile />} />
             </Route>
           </Routes>

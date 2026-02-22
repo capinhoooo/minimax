@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Loader2, ArrowLeft, Swords, Clock, Trophy, ExternalLink } from 'lucide-react';
 import { useAccount } from 'wagmi';
-import { useBattle, useResolveBattle } from '../../hooks/useBattleVault';
+import { useBattle, useResolveBattle, useUpdateBattleStatus } from '../../hooks/useBattleVault';
 import { useBattleEvents } from '../../hooks/useBattleEvents';
 import { useCalculateRangeScore, useCalculateFeeScore, useNormalizeCrossDex, usePlayerStats } from '../../hooks/useStylus';
 import { formatAddress, formatUSD, getExplorerUrl } from '../../lib/utils';
@@ -70,6 +70,7 @@ export default function BattleDetail() {
 
   // Write hooks
   const { resolveBattle, isPending: resolvePending } = useResolveBattle();
+  const { updateBattleStatus, isPending: updatePending, isSuccess: updateSuccess } = useUpdateBattleStatus();
 
   // Join battle modal
   const [showJoinModal, setShowJoinModal] = useState(false);
@@ -90,6 +91,11 @@ export default function BattleDetail() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Refetch on update success
+  useEffect(() => {
+    if (updateSuccess) refetchBattle();
+  }, [updateSuccess, refetchBattle]);
 
   // Refresh battle data every 30s
   useEffect(() => {
@@ -516,6 +522,32 @@ export default function BattleDetail() {
                 </span>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ===== UPDATE STATUS BUTTON (for ACTIVE battles) ===== */}
+        {battle.status === BattleStatus.ACTIVE && battle.opponent !== zeroAddr && (
+          <div
+            className="rounded-xl p-6 mb-8 text-center"
+            style={{
+              background: 'linear-gradient(135deg, rgba(66, 199, 230, 0.05), rgba(10, 10, 10, 0.95))',
+              border: '1px solid rgba(66, 199, 230, 0.3)',
+            }}
+          >
+            <p className="text-xs font-mono text-gray-400 tracking-wider mb-3">UPDATE ON-CHAIN SCORING DATA</p>
+            <button
+              onClick={() => battleId !== undefined && updateBattleStatus(battleId)}
+              disabled={updatePending}
+              className="px-12 py-3 rounded-lg font-bold text-sm tracking-widest transition-all hover:opacity-90 disabled:opacity-50"
+              style={{
+                background: 'transparent',
+                border: '1px solid rgba(66, 199, 230, 0.5)',
+                color: '#42c7e6',
+              }}
+            >
+              {updatePending ? 'UPDATING...' : 'UPDATE BATTLE STATUS'}
+            </button>
+            <p className="text-[10px] font-mono text-gray-600 mt-2">Accumulates in-range time and fee data on-chain</p>
           </div>
         )}
 

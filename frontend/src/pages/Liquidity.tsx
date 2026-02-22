@@ -18,14 +18,14 @@ type CamelotStep = 'weth_approve' | 'usdc_approve' | 'mint' | 'done';
 
 export default function Liquidity() {
   const navigate = useNavigate();
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount();
 
   // DEX tab state
   const [dexTab, setDexTab] = useState<DexTab>('v4');
 
   // Form inputs
   const [wethAmount, setWethAmount] = useState('0.01');
-  const [usdcAmount, setUsdcAmount] = useState('25');
+  const [usdcAmount, setUsdcAmount] = useState('30');
   const [minPrice, setMinPrice] = useState('1800');
   const [maxPrice, setMaxPrice] = useState('3500');
 
