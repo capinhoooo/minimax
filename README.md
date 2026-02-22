@@ -1,92 +1,125 @@
-# Minimax - LP BattleVault
+# Minimax -- Multi-DEX LP Battle Arena on Arbitrum
 
-**PvP battles between Uniswap V4 LP positions, powered by an autonomous agent with LI.FI cross-chain execution.**
+**Cross-DEX PvP battles between Uniswap V4 and Camelot V3 LP positions, scored by Arbitrum Stylus (Rust/WASM), with an on-chain ELO leaderboard and autonomous agent.**
 
-Minimax turns passive liquidity providing into a competitive game. Two LP positions enter a time-bound battle, and the one that performs better -- staying in range longer (Range Vault) or accumulating more fees (Fee Vault) -- wins the opponent's position.
-
-An autonomous agent monitors both vaults using a **MONITOR -> DECIDE -> ACT** strategy loop, auto-settles expired battles for resolver rewards, and plans cross-chain battle entries via the LI.FI SDK.
+Minimax turns passive liquidity providing into a competitive game. Two LP positions from *different DEXes* enter a time-bound battle, and the one that performs better -- staying in range longer (Range Battle) or accumulating more fees (Fee Battle) -- wins. An autonomous agent monitors battles, auto-settles expired ones for resolver rewards, and provides advisory intelligence via REST API.
 
 ## Architecture
 
 ```
 minimax/
-├── contract/        # Solidity smart contracts (Foundry)
+├── contract/           # Solidity smart contracts (Foundry)
 │   ├── src/
-│   │   ├── LPBattleVaultV4.sol        — Range-based PvP battles
-│   │   ├── LPFeeBattleV4.sol          — Fee-based PvP battles
-│   │   ├── hooks/BattleVaultHook.sol  — Custom Uniswap V4 hook
-│   │   ├── interfaces/IShared.sol     — Shared interfaces & errors
-│   │   └── libraries/                 — Pool utils, transfer helpers, constants
-│   └── test/                          — Foundry test suite
-├── agent/           # Autonomous TypeScript agent (Node.js + Hono)
+│   │   ├── core/
+│   │   │   ├── BattleArena.sol           -- Unified battle management (create, join, resolve)
+│   │   │   └── interfaces/               -- IBattleArena, IDEXAdapter
+│   │   ├── adapters/
+│   │   │   ├── UniswapV4Adapter.sol      -- V4 position normalization + fee collection
+│   │   │   └── CamelotAdapter.sol        -- Camelot/Algebra position normalization
+│   │   ├── hooks/BattleVaultHook.sol     -- Custom V4 hook for position locking
+│   │   ├── libraries/                    -- PoolUtilsV4, ArbitrumSepoliaConstants
+│   │   └── interfaces/IShared.sol        -- Shared interfaces (IPositionManager, Chainlink)
+│   ├── script/
+│   │   ├── DeployBattleArena.s.sol       -- Full deployment script
+│   │   └── SetupArbSepolia.s.sol         -- Testnet bootstrap (pools, positions, hook)
+│   └── test/                             -- Foundry test suite
+├── agent/              # Autonomous TypeScript agent (Node.js + Hono)
 │   ├── src/
-│   │   ├── BattleAgent.ts             — Strategy loop engine
-│   │   ├── server.ts                  — REST API (Hono)
-│   │   ├── analyzers/PoolAnalyzer.ts  — V4 pool state reader (extsload)
-│   │   ├── integrations/
-│   │   │   ├── LiFiIntegration.ts     — Cross-chain routing via LI.FI SDK
-│   │   │   ├── ArcIntegration.ts      — Circle CCTP bridge integration
-│   │   │   └── CrossChainEntryAgent.ts— Multi-chain battle entry planner
-│   │   └── commands/                  — CLI commands (demo, analyze, settle, status)
-│   └── dist/                          — Compiled output
-└── frontend/        # React web app (Vite + Tailwind CSS)
-    ├── src/
-    │   ├── pages/                     — Home, Lobby, Agent, Battle/, Swap, Leaderboard, Profile
-    │   ├── components/                — Layout, battle UI, wallet integration
-    │   ├── hooks/                     — useBattleVault, usePositionManager, useBattleEvents, useCCTPBridge
-    │   ├── lib/                       — Contract ABIs/addresses, formatting utils
-    │   └── config/wagmi.ts            — Wagmi + chain configuration
-    └── dist/                          — Production build
+│   │   ├── BattleAgent.ts                -- MONITOR -> DECIDE -> ACT loop
+│   │   ├── server.ts                     -- REST API with advisory endpoints
+│   │   ├── analyzers/PoolAnalyzer.ts     -- V4 pool state reader + win probability
+│   │   └── commands/                     -- CLI: demo, analyze, settle, status
+│   └── dist/                             -- Compiled output
+├── frontend/           # React web app (Vite + Tailwind CSS)
+│   ├── src/
+│   │   ├── pages/                        -- Lobby, Battle/, Liquidity, Leaderboard, Agent, Profile
+│   │   ├── components/                   -- Layout, battle UI, wallet integration
+│   │   ├── hooks/                        -- useBattleVault, useAddLiquidity, usePositionManager
+│   │   ├── lib/                          -- contracts.ts, v4-encoding.ts, tick-math.ts, utils
+│   │   └── config/wagmi.ts              -- Wagmi + Arbitrum Sepolia config
+│   └── dist/                             -- Production build
+└── stylus/             # Arbitrum Stylus contracts (Rust/WASM)
+    ├── battle_scoring/                   -- Range/fee scoring, cross-DEX normalization
+    └── leaderboard/                      -- ELO ratings, player stats, win/loss tracking
 ```
 
 ## How It Works
 
 ### Battle Flow
 
-1. **Create** -- Deposit a Uniswap V4 LP position (NFT) into a vault and set a battle duration
-2. **Join** -- An opponent deposits their LP position into the same battle
-3. **Compete** -- The battle runs for the set duration:
-   - **Range Vault**: Whoever stays in-range longer wins
-   - **Fee Vault**: Whoever earns more fees (relative to LP value) wins
-4. **Resolve** -- Anyone can settle an expired battle. The winner gets both positions; the resolver earns a 1% reward
+1. **Add Liquidity** -- Mint an LP position on Uniswap V4 or Camelot V3 (in-app, since no external UI supports Arb Sepolia)
+2. **Create Battle** -- Deposit your LP NFT into BattleArena, choose battle type and duration
+3. **Join Battle** -- An opponent deposits their LP position (can be from a different DEX)
+4. **Compete** -- The battle runs for the set duration:
+   - **Range Battle**: Whoever stays in-range longer wins
+   - **Fee Battle**: Whoever earns more fees (relative to LP value) wins
+5. **Resolve** -- Anyone can settle an expired battle. The Stylus scoring engine determines the winner, the ELO leaderboard updates, and the resolver earns a 1% reward
 
-### Battle Types
+### Cross-DEX Adapter Pattern
 
-| Vault | Win Condition | Tracking Method |
-|-------|--------------|-----------------|
-| Range Vault (`LPBattleVaultV4`) | Position stays in-range longer | Reads current tick from PoolManager, compares against each position's `[tickLower, tickUpper]` |
-| Fee Vault (`LPFeeBattleV4`) | Position accumulates more fees relative to value | Tracks `feeGrowthInside0/1LastX128` at battle start via `StateLibrary`, computes fee deltas at resolve |
+The BattleArena uses an adapter pattern to normalize positions across DEXes:
+
+```
+BattleArena (core logic)
+    ├── UniswapV4Adapter  -- V4 PositionManager, Permit2, PoolManager
+    └── CamelotAdapter    -- Algebra NonfungiblePositionManager, Factory
+```
+
+Both adapters implement `IDEXAdapter` with: `getPosition()`, `isInRange()`, `getCurrentTick()`, `getFeeGrowthInside()`, `collectFees()`, `lockPosition()`, `unlockPosition()`, `transferPositionIn/Out()`.
+
+### Stylus Scoring (Rust/WASM)
+
+The scoring engine runs on Arbitrum Stylus for gas-efficient computation:
+
+- `calculate_range_score(inRangeTime, totalTime, tickDistance)` -- Weighted range scoring
+- `calculate_fee_score(feesUSD, lpValueUSD, duration)` -- Fee-normalized scoring
+- `normalize_cross_dex(rawScore, dexType)` -- Cross-DEX normalization factors
+- `determine_winner(scoreA, scoreB)` -- Winner determination with tie handling
+
+The leaderboard tracks ELO ratings (K-factor=32, floor=100), wins/losses, and total value won.
 
 ### Agent Strategy Loop
 
-The autonomous agent runs a continuous loop:
-
 ```
-MONITOR  ->  Scan both vaults for active, pending, and expired battles
-DECIDE   ->  Prioritize actions: resolve expired (reward), analyze open, plan entries
-ACT      ->  Execute on-chain: settle battles, update status, or plan cross-chain entry via LI.FI
+MONITOR  ->  Scan BattleArena for active, pending, and expired battles
+DECIDE   ->  Prioritize: resolve expired (reward), analyze active, recommend entries
+ACT      ->  Execute on-chain: settle battles, update status, compute win probabilities
 ```
 
-The agent exposes a REST API (Hono on port 3001) with endpoints for status, vault data, logs, decisions, routes, and transactions.
+Advisory REST API (Hono on port 3001):
+- `GET /api/status` -- Agent status + uptime
+- `GET /api/battles` -- All active/pending/expired battles
+- `GET /api/battles/:id` -- Single battle detail + analysis
+- `GET /api/battles/:id/probability` -- Win probability calculation
+- `GET /api/recommendations` -- Scored pending battles for optimal entry
+- `GET /api/pools` -- V4 + Camelot pool state comparison
+- `GET /api/players/:address` -- Player stats from Stylus leaderboard
+- `GET /api/leaderboard` -- All players ranked by ELO
 
-### Cross-Chain Entry (LI.FI)
-
-Users on any EVM chain can enter battles on Ethereum through the agent's cross-chain planner:
-
-```
-Base (USDC)  ->  LI.FI Bridge  ->  Swap to ETH+USDC  ->  Add V4 Liquidity  ->  Enter Battle
-```
-
-The agent queries the LI.FI SDK for optimal routes across 9+ bridges (Mayan, Stargate V2, Glacier, Circle CCTP, etc.) and supports a fallback Arc CCTP path for native USDC bridging.
-
-## Deployed Contracts (Sepolia)
+## Deployed Contracts (Arbitrum Sepolia)
 
 | Contract | Address |
 |----------|---------|
-| Range Vault | `0xDC987dF013d655c8eEb89ACA2c14BdcFeEee850a` |
-| Fee Vault | `0xF09216A363FC5D88E899aa92239B2eeB1913913B` |
-| Pool Manager | `0xE03A1074c86CFeDd5C142C4F04F1a1536e203543` |
-| Position Manager | `0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4` |
+| BattleArena | `0x478505eb07B3C8943A642E51F066bcF8aC8ed51d` |
+| UniswapV4Adapter | `0x244C49E7986feC5BaD7C567d588B9262eF5e0604` |
+| CamelotAdapter | `0x5442068A4Cd117F26047c89f0A87D635112c886E` |
+| BattleVaultHook | `0x51ed077265dC54B2AFdBf26181b48f7314B44A40` |
+| ScoringEngine (Stylus) | `0xd34fFbE6D046cB1A3450768664caF97106d18204` |
+| Leaderboard (Stylus) | `0x7FEB2cf23797Fd950380CD9aD4B7D4cAd4B3C85B` |
+
+### Infrastructure
+
+| Component | Address |
+|-----------|---------|
+| V4 PoolManager | `0xFB3e0C6F74eB1a21CC1Da29aeC80D2Dfe6C9a317` |
+| V4 PositionManager | `0xAc631556d3d4019C95769033B5E719dD77124BAc` |
+| Permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
+| Camelot Factory | `0xaA37Bea711D585478E1c04b04707cCb0f10D762a` |
+| Camelot NFT Manager | `0x79EA6cB3889fe1FC7490A1C69C7861761d882D4A` |
+| Camelot Pool (WETH/USDC) | `0x3965361EA4f9000AE3cf995f553115b2832D0E2d` |
+| WETH | `0x980B62Da83eFf3D4576C647993b0c1D7faf17c73` |
+| USDC (Mintable) | `0xb893E3334D4Bd6C5ba8277Fd559e99Ed683A9FC7` |
+| ETH/USD Feed | `0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165` |
 
 ## Quick Start
 
@@ -94,13 +127,41 @@ The agent queries the LI.FI SDK for optimal routes across 9+ bridges (Mayan, Sta
 
 - Node.js 18+
 - Foundry (`curl -L https://foundry.paradigm.xyz | bash`)
+- Rust + Cargo (for Stylus contracts)
 
 ### Smart Contracts
 
 ```bash
 cd contract
+forge install
 forge build
 forge test
+```
+
+### Deploy (Arbitrum Sepolia)
+
+```bash
+cd contract
+cp .env.example .env   # Add PRIVATE_KEY, SCORING_ENGINE, LEADERBOARD
+forge script script/DeployBattleArena.s.sol --rpc-url $RPC_URL --broadcast -vvvv
+```
+
+### Bootstrap Testnet (Pools + Positions + Hook)
+
+The setup script creates V4 and Camelot WETH/USDC pools, mines and deploys the BattleVaultHook via CREATE2, mints LP positions on both DEXes, and approves the adapters. USDC on Arb Sepolia is mintable:
+
+```bash
+# Mint testnet USDC (if needed)
+cast send 0xb893E3334D4Bd6C5ba8277Fd559e99Ed683A9FC7 "mint(address,uint256)" \
+  YOUR_ADDRESS 220000000 --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+
+# Run the setup script
+forge script script/SetupArbSepolia.s.sol --rpc-url $RPC_URL --broadcast -vvvv
+
+# Initialize Stylus Leaderboard (Foundry can't simulate Stylus opcodes)
+cast send 0x7FEB2cf23797Fd950380CD9aD4B7D4cAd4B3C85B \
+  "initialize(address,address)" 0x478505eb07B3C8943A642E51F066bcF8aC8ed51d YOUR_ADDRESS \
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
 ```
 
 ### Agent
@@ -108,10 +169,11 @@ forge test
 ```bash
 cd agent
 npm install
-cp .env.example .env    # Add your private key and RPC URL
+cp .env.example .env   # Add private key and RPC URL
 npx tsx src/index.ts demo      # Run full demo
-npx tsx src/index.ts monitor   # Start autonomous loop
-npx tsx src/index.ts serve     # Start API server + loop
+npx tsx src/index.ts serve     # Start API server + strategy loop
+npx tsx src/index.ts status    # Check current battle state
+npx tsx src/index.ts settle    # Settle expired battles
 ```
 
 ### Frontend
@@ -122,43 +184,15 @@ npm install
 npm run dev   # http://localhost:5173
 ```
 
-## Sponsor Integration
-
-### Uniswap V4
-
-- Direct interaction with V4 PoolManager via `extsload` for pool state reads (sqrtPriceX96, tick, liquidity, fees)
-- LP position management through V4 PositionManager (`getPoolAndPositionInfo`, `getPositionLiquidity`)
-- Custom V4 hook (`BattleVaultHook`) for battle-specific pool logic
-- Fee tracking via `feeGrowthInside0/1LastX128` from `StateLibrary`
-- Contracts built against Uniswap V4 Core + Periphery as git submodules
-
-### LI.FI
-
-- **MONITOR -> DECIDE -> ACT** strategy loop as the core agent architecture
-- LI.FI SDK integration for cross-chain route discovery, quote comparison, and execution planning
-- Route optimization across 9+ bridges (Mayan, Stargate V2, Glacier, CCTP, etc.)
-- Cross-chain battle entry execution planning with step-by-step transaction plans
-- Frontend Agent dashboard showing live route analysis and strategy loop execution
-- LI.FI Widget embedded on `/swap` page for direct cross-chain swaps and bridges
+Navigate to `/liquidity` to mint LP positions, then `/battle/create` to start a battle.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Smart Contracts | Solidity 0.8.26, Foundry, Uniswap V4 Core + Periphery, OpenZeppelin |
-| Agent | TypeScript, Viem 2.21, LI.FI SDK 3.15, Hono 4.11, Node.js |
-| Frontend | React 19, Vite 7, Tailwind CSS 4, Wagmi 3, React Query 5, Recharts 3, LI.FI Widget 3.40 |
-| Cross-Chain | LI.FI SDK (9+ bridge providers), Circle CCTP (Arc integration) |
-| Network | Ethereum Sepolia Testnet |
-
-## Project Structure
-
-| Directory | Description |
-|-----------|-------------|
-| `contract/` | Foundry project with Solidity contracts, tests, deployment scripts, and V4 submodules |
-| `agent/` | TypeScript CLI + API server with strategy loop, pool analysis, and cross-chain integrations |
-| `frontend/` | React SPA with battle UI, agent dashboard, wallet connection, and LI.FI swap widget |
-
-## License
-
-MIT
+| Smart Contracts | Solidity 0.8.24, Foundry, Uniswap V4 Core + Periphery, OpenZeppelin |
+| Stylus Contracts | Rust, Arbitrum Stylus SDK, WASM compilation |
+| Agent | TypeScript, Viem 2.x, Hono 4.x, Node.js |
+| Frontend | React 19, Vite 7, Tailwind CSS 4, Wagmi 3, React Query 5, Recharts 3 |
+| Network | Arbitrum Sepolia Testnet |
+| Oracles | Chainlink ETH/USD price feeds |
