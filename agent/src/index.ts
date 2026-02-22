@@ -10,11 +10,11 @@ import { startServer } from './server.js';
 async function main() {
   console.log(`
   \x1b[36m╔═══════════════════════════════════════════════════════════════╗
-  ║       LP BATTLEVAULT - AUTONOMOUS AGENT                       ║
+  ║       MINIMAX LP BATTLEVAULT - AUTONOMOUS AGENT             ║
   ║                                                               ║
   ║  Strategy Loop: MONITOR -> DECIDE -> ACT                      ║
-  ║  Uniswap V4 Pool Analysis + LI.FI Cross-Chain Execution      ║
-  ║  Monitors Range Vault & Fee Vault on Sepolia                  ║
+  ║  Multi-DEX LP Battles (Uniswap V4 + Camelot) on Arbitrum     ║
+  ║  Stylus (Rust/WASM) Scoring Engine + ELO Leaderboard          ║
   ╚═══════════════════════════════════════════════════════════════╝\x1b[0m
   `);
 
@@ -47,15 +47,14 @@ async function main() {
 
       case 'settle': {
         const battleIdArg = process.argv[3];
-        const contractType = (process.argv[4] || 'range') as 'range' | 'fee';
 
         if (!battleIdArg) {
           logger.info('Running strategy cycle to find and settle ready battles...');
           await agent.runStrategyCycle();
         } else {
           const battleId = BigInt(battleIdArg);
-          logger.info(`Settling battle ${battleId} on ${contractType} vault...`);
-          const txHash = await agent.settleBattle(battleId, contractType);
+          logger.info(`Settling battle ${battleId}...`);
+          const txHash = await agent.settleBattle(battleId);
           if (txHash) {
             logger.success(`Battle settled! TX: ${txHash}`);
           } else {
@@ -68,25 +67,36 @@ async function main() {
       }
 
       case 'battles': {
-        const vaultType = (process.argv[3] || 'range') as 'range' | 'fee';
-        const battles = await agent.getActiveBattles(vaultType);
-        console.log(`\nActive battles in ${vaultType} vault: ${battles.length}`);
-        for (const id of battles) {
-          const battle = await agent.getBattle(id, vaultType);
+        const activeBattles = await agent.getActiveBattles();
+        const pendingBattles = await agent.getPendingBattles();
+        const battleCount = await agent.getBattleCount();
+
+        console.log(`\nBattleArena: ${battleCount} total battles`);
+        console.log(`Active: ${activeBattles.length} | Pending: ${pendingBattles.length}\n`);
+
+        for (const id of activeBattles) {
+          const battle = await agent.getBattle(id);
           if (battle) {
-            const timeRemaining = await agent.getTimeRemaining(id, vaultType);
-            console.log(`  Battle #${id}:`);
-            console.log(`    Status: ${battle.status}`);
+            const timeRem = agent.getTimeRemaining(battle);
+            console.log(`  Battle #${id}: ACTIVE`);
             console.log(`    Creator: ${battle.creator}`);
             console.log(`    Opponent: ${battle.opponent}`);
-            console.log(`    Time Remaining: ${timeRemaining}s`);
+            console.log(`    Time Remaining: ${timeRem}s`);
+          }
+        }
+        for (const id of pendingBattles) {
+          const battle = await agent.getBattle(id);
+          if (battle) {
+            console.log(`  Battle #${id}: PENDING`);
+            console.log(`    Creator: ${battle.creator}`);
+            console.log(`    Duration: ${battle.duration}s`);
           }
         }
         break;
       }
 
       case 'analyze':
-        await runAnalyze(agent, process.argv[3], process.argv[4]);
+        await runAnalyze(agent, process.argv[3]);
         break;
 
       case 'demo':
@@ -118,9 +128,9 @@ async function main() {
       case 'routes': {
         // Quick LI.FI route check (mainnet chain IDs for real data)
         const lifi = agent.getLiFi();
-        const fromChain = parseInt(process.argv[3] || '8453');  // Base default
-        const toChain = parseInt(process.argv[4] || '1');       // Ethereum default
-        const amount = process.argv[5] || '50000000'; // 50 USDC
+        const fromChain = parseInt(process.argv[3] || '8453');
+        const toChain = parseInt(process.argv[4] || '42161'); // Arbitrum default
+        const amount = process.argv[5] || '50000000';
 
         console.log(`\nQuerying LI.FI routes: Chain ${fromChain} -> ${toChain}, Amount: ${amount}\n`);
 
@@ -128,8 +138,8 @@ async function main() {
           const routes = await lifi.getSwapRoutes(
             fromChain,
             toChain,
-            '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC on Base
-            '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC on Ethereum
+            '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+            '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', // USDC on Arbitrum
             amount,
             agent.getAddress()
           );
@@ -153,13 +163,13 @@ async function main() {
 \x1b[36mCore Commands:\x1b[0m
   monitor              Start autonomous MONITOR->DECIDE->ACT loop (default)
   serve                Start API server (port 3001) + strategy loop
-  status               Print agent status and vault overview
-  settle [id] [type]   Settle a specific battle or run strategy cycle
-  battles [type]       List active battles (type: range|fee)
+  status               Print agent status and arena overview
+  settle [id]          Settle a specific battle or run strategy cycle
+  battles              List active and pending battles
 
 \x1b[36mAnalysis Commands:\x1b[0m
-  analyze              Analyze all active battles across both vaults
-  analyze [id] [type]  Analyze a specific battle
+  analyze              Analyze all active battles
+  analyze [id]         Analyze a specific battle
   routes [from] [to]   Query LI.FI cross-chain routes
 
 \x1b[36mDemo:\x1b[0m
@@ -168,9 +178,9 @@ async function main() {
 \x1b[36mExamples:\x1b[0m
   npx tsx src/index.ts monitor
   npx tsx src/index.ts demo
-  npx tsx src/index.ts analyze 0 range
-  npx tsx src/index.ts settle 1 fee
-  npx tsx src/index.ts routes 84532 11155111
+  npx tsx src/index.ts analyze 0
+  npx tsx src/index.ts settle 1
+  npx tsx src/index.ts routes 8453 42161
         `);
         break;
     }
