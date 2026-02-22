@@ -1,0 +1,3 @@
+[workspace]
+members = ["battle_scoring", "leaderboard"]
+resolver = "2"
