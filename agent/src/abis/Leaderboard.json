@@ -1,0 +1,6 @@
+[
+  {"type":"function","name":"getPlayerStats","inputs":[{"name":"player","type":"address"}],"outputs":[{"name":"elo","type":"uint256"},{"name":"wins","type":"uint256"},{"name":"losses","type":"uint256"},{"name":"totalBattles","type":"uint256"},{"name":"totalValueWon","type":"uint256"}],"stateMutability":"view"},
+  {"type":"function","name":"getElo","inputs":[{"name":"player","type":"address"}],"outputs":[{"name":"","type":"uint256"}],"stateMutability":"view"},
+  {"type":"function","name":"getPlayerCount","inputs":[],"outputs":[{"name":"","type":"uint256"}],"stateMutability":"view"},
+  {"type":"function","name":"getArena","inputs":[],"outputs":[{"name":"","type":"address"}],"stateMutability":"view"}
+]
