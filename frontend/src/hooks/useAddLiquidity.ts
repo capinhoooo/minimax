@@ -140,6 +140,7 @@ export function useAddLiquidityV4() {
       functionName: 'approve',
       args: [PERMIT2, maxUint256],
       chainId: arbitrumSepolia.id,
+      maxFeePerGas: 100000000n,
     });
   };
 
@@ -152,6 +153,7 @@ export function useAddLiquidityV4() {
       functionName: 'approve',
       args: [token, POSITION_MANAGER, maxUint160, MAX_EXPIRATION],
       chainId: arbitrumSepolia.id,
+      maxFeePerGas: 100000000n,
     });
   };
 
@@ -312,6 +314,7 @@ export function useAddLiquidityCamelot() {
       functionName: 'approve',
       args: [CAMELOT_NFT_MANAGER, maxUint256],
       chainId: arbitrumSepolia.id,
+      maxFeePerGas: 100000000n,
     });
   };
 
@@ -331,6 +334,7 @@ export function useAddLiquidityCamelot() {
       address: CAMELOT_NFT_MANAGER,
       abi: CAMELOT_NFT_MANAGER_ABI,
       functionName: 'mint',
+      maxFeePerGas: 100000000n,
       args: [
         {
           token0: CONTRACTS.WETH,

@@ -102,6 +102,7 @@ export default function Faucet() {
       functionName: 'deposit',
       value: parseEther(ethAmount || '0'),
       chainId: arbitrumSepolia.id,
+      maxFeePerGas: 100000000n,
     });
   };
 
@@ -114,6 +115,7 @@ export default function Faucet() {
       functionName: 'mint',
       args: [address, parseUnits(usdcAmount || '0', 6)],
       chainId: arbitrumSepolia.id,
+      maxFeePerGas: 100000000n,
     });
   };
 
