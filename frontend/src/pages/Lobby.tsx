@@ -3,13 +3,14 @@ import { Link } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { formatAddress, formatUSD, formatTimeRemaining } from '../lib/utils';
 import {
-  useUserBattles,
+  usePlayerBattles,
   useActiveBattles,
   usePendingBattles,
   useBattleCount,
-  useRangeBattles,
-  useFeeBattles,
+  useBattles,
 } from '../hooks/useBattleVault';
+import { BattleStatus, BattleType, battleTypeName } from '../types';
+import type { Battle } from '../types';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
@@ -17,57 +18,32 @@ export default function Lobby() {
   const { address, isConnected } = useAccount();
 
   // Global stats
-  const { data: rangeBattleCount } = useBattleCount('range');
-  const { data: feeBattleCount } = useBattleCount('fee');
-  const { data: rangeActiveIds } = useActiveBattles('range');
-  const { data: feeActiveIds } = useActiveBattles('fee');
-  const { data: rangePendingIds } = usePendingBattles('range');
-  const { data: feePendingIds } = usePendingBattles('fee');
+  const { data: battleCountData } = useBattleCount();
+  const { data: activeIds } = useActiveBattles();
+  const { data: pendingIds } = usePendingBattles();
 
   // User's battles
-  const { data: userRangeBattles } = useUserBattles(address, 'range');
-  const { data: userFeeBattles } = useUserBattles(address, 'fee');
+  const { data: userBattleIds } = usePlayerBattles(address);
 
-  const userRangeIds = useMemo(() => {
-    if (!userRangeBattles) return [] as bigint[];
-    const [ids] = userRangeBattles as [bigint[], boolean[]];
-    return ids;
-  }, [userRangeBattles]);
+  const userIds = useMemo(() => {
+    if (!userBattleIds) return [] as bigint[];
+    return userBattleIds as bigint[];
+  }, [userBattleIds]);
 
-  const userFeeIds = useMemo(() => {
-    if (!userFeeBattles) return [] as bigint[];
-    const [ids] = userFeeBattles as [bigint[], boolean[]];
-    return ids;
-  }, [userFeeBattles]);
-
-  const { data: userRangeDetails } = useRangeBattles(userRangeIds);
-  const { data: userFeeDetails } = useFeeBattles(userFeeIds);
+  const { data: userBattleDetails } = useBattles(userIds);
 
   // Compute user stats
   const userStats = useMemo(() => {
     let wins = 0, losses = 0, total = 0;
 
-    if (userRangeDetails && address) {
-      userRangeDetails.forEach((r) => {
+    if (userBattleDetails && address) {
+      userBattleDetails.forEach((r) => {
         if (r.status === 'success' && r.result) {
-          const [, , winner, , , , , , isResolved] = r.result as [string, string, string, bigint, bigint, bigint, bigint, bigint, boolean, string];
+          const b = r.result as Battle;
           total++;
-          if (isResolved) {
-            if (winner.toLowerCase() === address.toLowerCase()) wins++;
-            else if (winner !== ZERO_ADDRESS) losses++;
-          }
-        }
-      });
-    }
-
-    if (userFeeDetails && address) {
-      userFeeDetails.forEach((r) => {
-        if (r.status === 'success' && r.result) {
-          const [, , winner, , , , , , , isResolved] = r.result as [string, string, string, bigint, bigint, bigint, bigint, bigint, bigint, boolean, string];
-          total++;
-          if (isResolved) {
-            if (winner.toLowerCase() === address.toLowerCase()) wins++;
-            else if (winner !== ZERO_ADDRESS) losses++;
+          if (b.status === BattleStatus.RESOLVED) {
+            if (b.winner.toLowerCase() === address.toLowerCase()) wins++;
+            else if (b.winner !== ZERO_ADDRESS) losses++;
           }
         }
       });
@@ -75,11 +51,11 @@ export default function Lobby() {
 
     const winRate = (wins + losses) > 0 ? ((wins / (wins + losses)) * 100).toFixed(1) : '0.0';
     return { wins, losses, total, winRate };
-  }, [userRangeDetails, userFeeDetails, address]);
+  }, [userBattleDetails, address]);
 
   // Battle history from user's battles
   type HistoryEntry = {
-    vaultType: 'range' | 'fee';
+    battleType: number;
     battleId: bigint;
     result: 'VICTORY' | 'DEFEAT' | 'ACTIVE';
     opponent: string;
@@ -89,107 +65,70 @@ export default function Lobby() {
   const battleHistory = useMemo(() => {
     const history: HistoryEntry[] = [];
 
-    if (userRangeDetails && userRangeBattles && address) {
-      const [ids] = userRangeBattles as [bigint[], boolean[]];
-      userRangeDetails.forEach((r, i) => {
+    if (userBattleDetails && address) {
+      userBattleDetails.forEach((r, i) => {
         if (r.status === 'success' && r.result) {
-          const [creator, opponent, winner, , , , , totalValueUSD, isResolved] = r.result as [string, string, string, bigint, bigint, bigint, bigint, bigint, boolean, string];
-          const isUserCreator = creator.toLowerCase() === address.toLowerCase();
-          const opponentAddr = isUserCreator ? opponent : creator;
+          const b = r.result as Battle;
+          const isUserCreator = b.creator.toLowerCase() === address.toLowerCase();
+          const opponentAddr = isUserCreator ? b.opponent : b.creator;
           history.push({
-            vaultType: 'range',
-            battleId: ids[i],
-            result: isResolved
-              ? (winner.toLowerCase() === address.toLowerCase() ? 'VICTORY' : 'DEFEAT')
+            battleType: b.battleType,
+            battleId: userIds[i],
+            result: b.status === BattleStatus.RESOLVED
+              ? (b.winner.toLowerCase() === address.toLowerCase() ? 'VICTORY' : 'DEFEAT')
               : 'ACTIVE',
             opponent: opponentAddr,
-            valueUSD: totalValueUSD,
-          });
-        }
-      });
-    }
-
-    if (userFeeDetails && userFeeBattles && address) {
-      const [ids] = userFeeBattles as [bigint[], boolean[]];
-      userFeeDetails.forEach((r, i) => {
-        if (r.status === 'success' && r.result) {
-          const [creator, opponent, winner, , , , , creatorLPValue, , isResolved] = r.result as [string, string, string, bigint, bigint, bigint, bigint, bigint, bigint, boolean, string];
-          const isUserCreator = creator.toLowerCase() === address.toLowerCase();
-          const opponentAddr = isUserCreator ? opponent : creator;
-          history.push({
-            vaultType: 'fee',
-            battleId: ids[i],
-            result: isResolved
-              ? (winner.toLowerCase() === address.toLowerCase() ? 'VICTORY' : 'DEFEAT')
-              : 'ACTIVE',
-            opponent: opponentAddr,
-            valueUSD: creatorLPValue,
+            valueUSD: b.creatorValueUSD,
           });
         }
       });
     }
 
     return history.reverse().slice(0, 5);
-  }, [userRangeDetails, userFeeDetails, userRangeBattles, userFeeBattles, address]);
+  }, [userBattleDetails, userIds, address]);
 
   // Featured battle: first active battle with an opponent (ongoing)
-  const activeRangeArr = (rangeActiveIds as bigint[]) ?? [];
-  const activeFeeArr = (feeActiveIds as bigint[]) ?? [];
-  const { data: activeRangeDetails } = useRangeBattles(activeRangeArr);
-  const { data: activeFeeDetails } = useFeeBattles(activeFeeArr);
+  const activeArr = ((activeIds as bigint[]) ?? []);
+  const { data: activeDetails } = useBattles(activeArr);
 
   type FeaturedBattle = {
-    vaultType: 'range' | 'fee';
+    battleType: number;
     id: bigint;
     creator: string;
     opponent: string;
     valueUSD: bigint;
     duration: bigint;
-    status: string;
   };
 
   const featured = useMemo((): FeaturedBattle | null => {
-    if (activeRangeDetails) {
-      for (let i = 0; i < activeRangeDetails.length; i++) {
-        const r = activeRangeDetails[i];
+    if (activeDetails) {
+      for (let i = 0; i < activeDetails.length; i++) {
+        const r = activeDetails[i];
         if (r.status === 'success' && r.result) {
-          const [creator, opponent, , , , , duration, totalValueUSD, , status] = r.result as [string, string, string, bigint, bigint, bigint, bigint, bigint, boolean, string];
-          if (opponent !== ZERO_ADDRESS) {
-            return { vaultType: 'range', id: activeRangeArr[i], creator, opponent, valueUSD: totalValueUSD, duration, status };
+          const b = r.result as Battle;
+          if (b.opponent !== ZERO_ADDRESS) {
+            return { battleType: b.battleType, id: activeArr[i], creator: b.creator, opponent: b.opponent, valueUSD: b.creatorValueUSD, duration: b.duration };
           }
         }
       }
-    }
-    if (activeFeeDetails) {
-      for (let i = 0; i < activeFeeDetails.length; i++) {
-        const r = activeFeeDetails[i];
+      // Fallback: any active battle
+      if (activeDetails.length > 0) {
+        const r = activeDetails[0];
         if (r.status === 'success' && r.result) {
-          const [creator, opponent, , , , , duration, creatorLPValue, , , status] = r.result as [string, string, string, bigint, bigint, bigint, bigint, bigint, bigint, boolean, string];
-          if (opponent !== ZERO_ADDRESS) {
-            return { vaultType: 'fee', id: activeFeeArr[i], creator, opponent, valueUSD: creatorLPValue, duration, status };
-          }
+          const b = r.result as Battle;
+          return { battleType: b.battleType, id: activeArr[0], creator: b.creator, opponent: b.opponent, valueUSD: b.creatorValueUSD, duration: b.duration };
         }
-      }
-    }
-    // Fallback: any active battle
-    if (activeRangeDetails && activeRangeDetails.length > 0) {
-      const r = activeRangeDetails[0];
-      if (r.status === 'success' && r.result) {
-        const [creator, opponent, , , , , duration, totalValueUSD, , status] = r.result as [string, string, string, bigint, bigint, bigint, bigint, bigint, boolean, string];
-        return { vaultType: 'range', id: activeRangeArr[0], creator, opponent, valueUSD: totalValueUSD, duration, status };
       }
     }
     return null;
-  }, [activeRangeDetails, activeFeeDetails, activeRangeArr, activeFeeArr]);
+  }, [activeDetails, activeArr]);
 
   // Pending battles = "open challenges"
-  const pendingRangeArr = (rangePendingIds as bigint[]) ?? [];
-  const pendingFeeArr = (feePendingIds as bigint[]) ?? [];
-  const { data: pendingRangeDetails } = useRangeBattles(pendingRangeArr);
-  const { data: pendingFeeDetails } = useFeeBattles(pendingFeeArr);
+  const pendingArr = ((pendingIds as bigint[]) ?? []);
+  const { data: pendingDetails } = useBattles(pendingArr);
 
   type PendingMatch = {
-    vaultType: 'range' | 'fee';
+    battleType: number;
     id: bigint;
     creator: string;
     duration: bigint;
@@ -198,29 +137,24 @@ export default function Lobby() {
 
   const pendingMatches = useMemo(() => {
     const matches: PendingMatch[] = [];
-    if (pendingRangeDetails) {
-      pendingRangeDetails.forEach((r, i) => {
+    if (pendingDetails) {
+      pendingDetails.forEach((r, i) => {
         if (r.status === 'success' && r.result) {
-          const [creator, , , , , , duration, totalValueUSD] = r.result as [string, string, string, bigint, bigint, bigint, bigint, bigint, boolean, string];
-          matches.push({ vaultType: 'range', id: pendingRangeArr[i], creator, duration, valueUSD: totalValueUSD });
-        }
-      });
-    }
-    if (pendingFeeDetails) {
-      pendingFeeDetails.forEach((r, i) => {
-        if (r.status === 'success' && r.result) {
-          const [creator, , , , , , duration, creatorLPValue] = r.result as [string, string, string, bigint, bigint, bigint, bigint, bigint, bigint, boolean, string];
-          matches.push({ vaultType: 'fee', id: pendingFeeArr[i], creator, duration, valueUSD: creatorLPValue });
+          const b = r.result as Battle;
+          matches.push({ battleType: b.battleType, id: pendingArr[i], creator: b.creator, duration: b.duration, valueUSD: b.creatorValueUSD });
         }
       });
     }
     return matches.slice(0, 5);
-  }, [pendingRangeDetails, pendingFeeDetails, pendingRangeArr, pendingFeeArr]);
+  }, [pendingDetails, pendingArr]);
 
   // Aggregate stats
-  const totalBattles = (rangeBattleCount ? Number(rangeBattleCount as bigint) : 0) + (feeBattleCount ? Number(feeBattleCount as bigint) : 0);
-  const totalActive = activeRangeArr.length + activeFeeArr.length;
-  const totalPending = pendingRangeArr.length + pendingFeeArr.length;
+  const totalBattles = battleCountData ? Number(battleCountData as bigint) : 0;
+  const totalActive = activeArr.length;
+  const totalPending = pendingArr.length;
+
+  const typeColor = (bt: number) => bt === BattleType.RANGE ? '#42c7e6' : '#a855f7';
+  const typeLabel = (bt: number) => bt === BattleType.RANGE ? 'RNG' : 'FEE';
 
   return (
     <div className="min-h-screen grid-bg">
@@ -434,7 +368,7 @@ export default function Lobby() {
                 {featured ? (
                   <>
                     <p className="text-center text-[10px] font-mono text-gray-600 tracking-widest mb-6 relative z-10">
-                      {featured.vaultType === 'range' ? 'RANGE' : 'FEE'} BATTLE #{featured.id.toString()}
+                      {battleTypeName(featured.battleType).toUpperCase()} #{featured.id.toString()}
                     </p>
 
                     {/* VS Battle Display */}
@@ -500,12 +434,12 @@ export default function Lobby() {
                       <span
                         className="px-4 py-1 rounded-full text-[10px] font-mono tracking-wider"
                         style={{
-                          border: `1px solid ${featured.vaultType === 'range' ? '#42c7e6' : '#a855f7'}`,
-                          color: featured.vaultType === 'range' ? '#42c7e6' : '#a855f7',
-                          background: featured.vaultType === 'range' ? 'rgba(66, 199, 230, 0.08)' : 'rgba(168, 85, 247, 0.08)',
+                          border: `1px solid ${typeColor(featured.battleType)}`,
+                          color: typeColor(featured.battleType),
+                          background: `${typeColor(featured.battleType)}14`,
                         }}
                       >
-                        {featured.vaultType === 'range' ? 'RANGE BATTLE' : 'FEE BATTLE'} // {formatTimeRemaining(Number(featured.duration))}
+                        {battleTypeName(featured.battleType).toUpperCase()} // {formatTimeRemaining(Number(featured.duration))}
                       </span>
                     </div>
 
@@ -517,7 +451,7 @@ export default function Lobby() {
                     {/* Spectate */}
                     <div className="flex justify-center relative z-10">
                       <Link
-                        to={`/battle/${featured.vaultType}-${featured.id}`}
+                        to={`/battle/${featured.id}`}
                         className="px-6 py-2.5 rounded-md text-xs font-bold font-mono tracking-widest transition-all hover:opacity-80"
                         style={{
                           border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -573,7 +507,7 @@ export default function Lobby() {
                 <div className="space-y-0">
                   {pendingMatches.map((match, i) => (
                     <div
-                      key={`${match.vaultType}-${match.id}`}
+                      key={match.id.toString()}
                       className="flex items-center justify-between py-3"
                       style={{
                         borderBottom:
@@ -586,11 +520,11 @@ export default function Lobby() {
                         <span
                           className="text-[10px] font-mono tracking-wider px-1.5 py-0.5 rounded"
                           style={{
-                            color: match.vaultType === 'range' ? '#42c7e6' : '#a855f7',
-                            border: `1px solid ${match.vaultType === 'range' ? 'rgba(66, 199, 230, 0.3)' : 'rgba(168, 85, 247, 0.3)'}`,
+                            color: typeColor(match.battleType),
+                            border: `1px solid ${typeColor(match.battleType)}4d`,
                           }}
                         >
-                          {match.vaultType === 'range' ? 'RNG' : 'FEE'}
+                          {typeLabel(match.battleType)}
                         </span>
                         <span className="text-xs font-mono text-white tracking-wider">
                           <span className="font-bold">{formatAddress(match.creator)}</span>
@@ -602,7 +536,7 @@ export default function Lobby() {
                           {formatTimeRemaining(Number(match.duration))}
                         </span>
                         <Link
-                          to={`/battle/${match.vaultType}-${match.id}`}
+                          to={`/battle/${match.id}`}
                           className="px-3 py-1 text-[10px] font-mono tracking-wider rounded transition-all hover:opacity-80"
                           style={{
                             border: '1px solid rgba(237, 127, 47, 0.4)',
@@ -649,7 +583,7 @@ export default function Lobby() {
                 <div className="space-y-3">
                   {battleHistory.map((entry, i) => (
                     <div
-                      key={`${entry.vaultType}-${entry.battleId}`}
+                      key={entry.battleId.toString()}
                       className="py-2"
                       style={{
                         borderBottom:
@@ -670,11 +604,11 @@ export default function Lobby() {
                         <span
                           className="text-[9px] font-mono tracking-wider px-1.5 py-0.5 rounded"
                           style={{
-                            color: entry.vaultType === 'range' ? '#42c7e6' : '#a855f7',
-                            border: `1px solid ${entry.vaultType === 'range' ? 'rgba(66, 199, 230, 0.3)' : 'rgba(168, 85, 247, 0.3)'}`,
+                            color: typeColor(entry.battleType),
+                            border: `1px solid ${typeColor(entry.battleType)}4d`,
                           }}
                         >
-                          {entry.vaultType === 'range' ? 'RNG' : 'FEE'}
+                          {typeLabel(entry.battleType)}
                         </span>
                       </div>
                       <p className="text-[11px] font-mono text-gray-500">
@@ -682,7 +616,7 @@ export default function Lobby() {
                         ({formatUSD(entry.valueUSD)})
                       </p>
                       <Link
-                        to={`/battle/${entry.vaultType}-${entry.battleId}`}
+                        to={`/battle/${entry.battleId}`}
                         className="text-[9px] font-mono tracking-wider hover:underline"
                         style={{ color: '#42c7e6' }}
                       >
@@ -715,31 +649,16 @@ export default function Lobby() {
 
               {totalActive > 0 ? (
                 <div className="space-y-2">
-                  {activeRangeArr.slice(0, 3).map((id) => (
+                  {activeArr.slice(0, 6).map((id) => (
                     <Link
-                      key={`range-${id}`}
-                      to={`/battle/range-${id}`}
+                      key={id.toString()}
+                      to={`/battle/${id}`}
                       className="flex items-center justify-between py-2 px-2 rounded hover:bg-white/5 transition-colors"
                     >
                       <div className="flex items-center gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                         <span className="text-[11px] font-mono text-white tracking-wider">
-                          RANGE #{id.toString()}
-                        </span>
-                      </div>
-                      <span className="text-[10px] font-mono text-gray-500">VIEW</span>
-                    </Link>
-                  ))}
-                  {activeFeeArr.slice(0, 3).map((id) => (
-                    <Link
-                      key={`fee-${id}`}
-                      to={`/battle/fee-${id}`}
-                      className="flex items-center justify-between py-2 px-2 rounded hover:bg-white/5 transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
-                        <span className="text-[11px] font-mono text-white tracking-wider">
-                          FEE #{id.toString()}
+                          BATTLE #{id.toString()}
                         </span>
                       </div>
                       <span className="text-[10px] font-mono text-gray-500">VIEW</span>
@@ -767,7 +686,7 @@ export default function Lobby() {
         {/* Footer */}
         <div className="mt-12 text-center">
           <p className="text-[10px] font-mono text-gray-700 tracking-widest">
-            ARENA_V4 SECURE TERMINAL // CONNECTION STABLE // SYSTEM READY
+            BATTLE_ARENA SECURE TERMINAL // CONNECTION STABLE // ARBITRUM SEPOLIA
           </p>
         </div>
       </div>
