@@ -32,7 +32,7 @@ minimax/
 │   └── dist/                             -- Compiled output
 ├── frontend/           # React web app (Vite + Tailwind CSS)
 │   ├── src/
-│   │   ├── pages/                        -- Lobby, Battle/, Liquidity, Leaderboard, Agent, Profile
+│   │   ├── pages/                        -- Lobby, Battle/, Liquidity, Faucet, Leaderboard, Agent, Profile
 │   │   ├── components/                   -- Layout, battle UI, wallet integration
 │   │   ├── hooks/                        -- useBattleVault, useAddLiquidity, usePositionManager
 │   │   ├── lib/                          -- contracts.ts, v4-encoding.ts, tick-math.ts, utils
@@ -47,13 +47,14 @@ minimax/
 
 ### Battle Flow
 
-1. **Add Liquidity** -- Mint an LP position on Uniswap V4 or Camelot V3 (in-app, since no external UI supports Arb Sepolia)
-2. **Create Battle** -- Deposit your LP NFT into BattleArena, choose battle type and duration
-3. **Join Battle** -- An opponent deposits their LP position (can be from a different DEX)
-4. **Compete** -- The battle runs for the set duration:
-   - **Range Battle**: Whoever stays in-range longer wins
+1. **Get Tokens** -- Wrap ETH to WETH and mint testnet USDC via the in-app Faucet (`/faucet`)
+2. **Add Liquidity** -- Mint an LP position on Uniswap V4 or Camelot V3 (in-app, since no external UI supports Arb Sepolia)
+3. **Create Battle** -- Deposit your LP NFT into BattleArena, choose battle type and duration
+4. **Join Battle** -- An opponent deposits their LP position (can be from a different DEX)
+5. **Compete** -- The battle runs for the set duration:
+   - **Range Battle**: Whoever stays in-range longer wins (call `updateBattleStatus` to track in-range time)
    - **Fee Battle**: Whoever earns more fees (relative to LP value) wins
-5. **Resolve** -- Anyone can settle an expired battle. The Stylus scoring engine determines the winner, the ELO leaderboard updates, and the resolver earns a 1% reward
+6. **Resolve** -- Anyone can settle an expired battle. The Stylus scoring engine determines the winner, the ELO leaderboard updates, and the resolver earns a 1% reward
 
 ### Cross-DEX Adapter Pattern
 
@@ -100,8 +101,8 @@ Advisory REST API (Hono on port 3001):
 
 | Contract | Address |
 |----------|---------|
-| BattleArena | `0x478505eb07B3C8943A642E51F066bcF8aC8ed51d` |
-| UniswapV4Adapter | `0x244C49E7986feC5BaD7C567d588B9262eF5e0604` |
+| BattleArena | `0x6cfFE36cC727A649bC8D269CbD675552d0A550F6` |
+| UniswapV4Adapter | `0xca6118BD65778C454B67B11DE39B9BB881915b40` |
 | CamelotAdapter | `0x5442068A4Cd117F26047c89f0A87D635112c886E` |
 | BattleVaultHook | `0x51ed077265dC54B2AFdBf26181b48f7314B44A40` |
 | ScoringEngine (Stylus) | `0xd34fFbE6D046cB1A3450768664caF97106d18204` |
@@ -160,7 +161,7 @@ forge script script/SetupArbSepolia.s.sol --rpc-url $RPC_URL --broadcast -vvvv
 
 # Initialize Stylus Leaderboard (Foundry can't simulate Stylus opcodes)
 cast send 0x7FEB2cf23797Fd950380CD9aD4B7D4cAd4B3C85B \
-  "initialize(address,address)" 0x478505eb07B3C8943A642E51F066bcF8aC8ed51d YOUR_ADDRESS \
+  "initialize(address,address)" 0x6cfFE36cC727A649bC8D269CbD675552d0A550F6 YOUR_ADDRESS \
   --rpc-url $RPC_URL --private-key $PRIVATE_KEY
 ```
 
@@ -184,7 +185,7 @@ npm install
 npm run dev   # http://localhost:5173
 ```
 
-Navigate to `/liquidity` to mint LP positions, then `/battle/create` to start a battle.
+Navigate to `/faucet` to get WETH and USDC, then `/liquidity` to mint LP positions, then `/battle/create` to start a battle.
 
 ## Tech Stack
 

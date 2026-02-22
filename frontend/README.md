@@ -12,6 +12,7 @@ React web application for creating, joining, and tracking cross-DEX LP position 
 | `/battle/:id` | Battle Detail | Live battle tracking with performance chart |
 | `/battle/create` | Create Battle | Select DEX (V4/Camelot), deposit LP NFT, choose battle type and duration |
 | `/liquidity` | Add Liquidity | Mint LP positions on Uniswap V4 or Camelot V3 (WETH/USDC) |
+| `/faucet` | Faucet | Wrap ETH to WETH and mint testnet USDC |
 | `/agent` | Agent Dashboard | Live strategy loop visualization with advisory data |
 | `/leaderboard` | Leaderboard | Player rankings by ELO, wins, and total value won |
 | `/profile` | Profile | User's battle history and LP positions |
@@ -83,6 +84,7 @@ useBattle(battleId)                 // Full battle struct
 useTimeRemaining(battle)            // Time until expiry
 useCreateBattle()                   // Create battle (dexType, tokenId, duration, battleType)
 useJoinBattle()                     // Join battle (battleId, dexType, tokenId)
+useUpdateBattleStatus()             // Update in-range tracking for active battles
 useResolveBattle()                  // Settle expired battle
 
 // hooks/usePositionManager.ts -- DEX-aware LP position queries
@@ -134,6 +136,7 @@ frontend/src/
 │   ├── Home.tsx                 # Landing page
 │   ├── Lobby.tsx                # Main dashboard with stats
 │   ├── Liquidity.tsx            # Add Liquidity (V4 + Camelot)
+│   ├── Faucet.tsx               # Wrap ETH to WETH + Mint testnet USDC
 │   ├── Agent.tsx                # Agent strategy loop dashboard
 │   ├── Leaderboard.tsx          # Player rankings (ELO from Stylus)
 │   ├── Profile.tsx              # User profile & history

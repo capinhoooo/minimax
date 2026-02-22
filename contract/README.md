@@ -68,8 +68,8 @@ Two LP positions compete based on fee accumulation rate. Fee growth is recorded 
 
 | Contract | Address |
 |----------|---------|
-| BattleArena | `0x478505eb07B3C8943A642E51F066bcF8aC8ed51d` |
-| UniswapV4Adapter | `0x244C49E7986feC5BaD7C567d588B9262eF5e0604` |
+| BattleArena | `0x6cfFE36cC727A649bC8D269CbD675552d0A550F6` |
+| UniswapV4Adapter | `0xca6118BD65778C454B67B11DE39B9BB881915b40` |
 | CamelotAdapter | `0x5442068A4Cd117F26047c89f0A87D635112c886E` |
 | BattleVaultHook | `0x51ed077265dC54B2AFdBf26181b48f7314B44A40` |
 | ScoringEngine (Stylus) | `0xd34fFbE6D046cB1A3450768664caF97106d18204` |
