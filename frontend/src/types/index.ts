@@ -1,30 +1,59 @@
 import type { Address } from 'viem';
 
-// Battle types
+// ============ Contract Enums ============
+
+// BattleStatus: PENDING=0, ACTIVE=1, EXPIRED=2, RESOLVED=3
+export const BattleStatus = {
+  PENDING: 0,
+  ACTIVE: 1,
+  EXPIRED: 2,
+  RESOLVED: 3,
+} as const;
+export type BattleStatus = (typeof BattleStatus)[keyof typeof BattleStatus];
+
+// BattleType: RANGE=0, FEE=1
+export const BattleType = {
+  RANGE: 0,
+  FEE: 1,
+} as const;
+export type BattleType = (typeof BattleType)[keyof typeof BattleType];
+
+// DexType: UNISWAP_V4=0, CAMELOT_V3=1
+export const DexType = {
+  UNISWAP_V4: 0,
+  CAMELOT_V3: 1,
+} as const;
+export type DexType = (typeof DexType)[keyof typeof DexType];
+
+// ============ Battle Data ============
+
 export interface Battle {
   id: bigint;
   creator: Address;
   opponent: Address;
   winner: Address;
+  creatorDex: number;
+  opponentDex: number;
   creatorTokenId: bigint;
   opponentTokenId: bigint;
+  creatorValueUSD: bigint;
+  opponentValueUSD: bigint;
+  battleType: number;
+  status: number;
   startTime: bigint;
   duration: bigint;
-  totalValueUSD: bigint;
-  isResolved: boolean;
-  status: string;
+  token0: Address;
+  token1: Address;
+  creatorInRangeTime: bigint;
+  opponentInRangeTime: bigint;
+  lastUpdateTime: bigint;
+  creatorStartFeeGrowth0: bigint;
+  creatorStartFeeGrowth1: bigint;
+  opponentStartFeeGrowth0: bigint;
+  opponentStartFeeGrowth1: bigint;
+  creatorLiquidity: bigint;
+  opponentLiquidity: bigint;
 }
-
-export type BattleStatus =
-  | 'waiting_for_opponent'
-  | 'ongoing'
-  | 'ready_to_resolve'
-  | 'resolved';
-
-export type BattleType = 'range' | 'fee';
-
-// Contract type for vault selection
-export type VaultType = 'range' | 'fee';
 
 // Duration options
 export interface DurationOption {
@@ -33,6 +62,7 @@ export interface DurationOption {
 }
 
 export const DURATION_OPTIONS: DurationOption[] = [
+  { label: '5 Minutes', value: 300 },
   { label: '1 Hour', value: 3600 },
   { label: '6 Hours', value: 21600 },
   { label: '24 Hours', value: 86400 },
@@ -65,38 +95,6 @@ export interface ChainInfo {
   };
 }
 
-// Token info
-export interface TokenInfo {
-  address: Address;
-  symbol: string;
-  name: string;
-  decimals: number;
-  chainId: number;
-  logoURI?: string;
-}
-
-// Swap quote
-export interface SwapQuote {
-  fromChain: number;
-  toChain: number;
-  fromToken: TokenInfo;
-  toToken: TokenInfo;
-  fromAmount: string;
-  toAmount: string;
-  estimatedGas: string;
-  route: unknown;
-}
-
-// Bridge transaction
-export interface BridgeTransaction {
-  sourceChain: string;
-  destChain: string;
-  amount: bigint;
-  status: 'pending' | 'attesting' | 'ready' | 'completed' | 'failed';
-  burnTxHash?: string;
-  mintTxHash?: string;
-}
-
 // Agent status
 export interface AgentStatus {
   isOnline: boolean;
@@ -116,4 +114,32 @@ export interface AgentAction {
   reasoning: string;
   txHash?: string;
   status: 'pending' | 'success' | 'failed';
+}
+
+// ============ Helper Functions ============
+
+export function statusName(status: number): string {
+  switch (status) {
+    case BattleStatus.PENDING: return 'Pending';
+    case BattleStatus.ACTIVE: return 'Active';
+    case BattleStatus.EXPIRED: return 'Expired';
+    case BattleStatus.RESOLVED: return 'Resolved';
+    default: return 'Unknown';
+  }
+}
+
+export function battleTypeName(battleType: number): string {
+  switch (battleType) {
+    case BattleType.RANGE: return 'Range Battle';
+    case BattleType.FEE: return 'Fee Battle';
+    default: return 'Unknown';
+  }
+}
+
+export function dexTypeName(dexType: number): string {
+  switch (dexType) {
+    case DexType.UNISWAP_V4: return 'Uniswap V4';
+    case DexType.CAMELOT_V3: return 'Camelot V3';
+    default: return 'Unknown';
+  }
 }
