@@ -1,6 +1,6 @@
 import { useAccount, useDisconnect, useBalance } from 'wagmi';
 import { useState, useEffect } from 'react';
-import { Wallet, ChevronDown, LogOut, Copy, ExternalLink } from 'lucide-react';
+import { ChevronDown, LogOut, Copy, ExternalLink } from 'lucide-react';
 import { formatAddress, formatTokenAmount, getExplorerUrl, copyToClipboard } from '../../lib/utils';
 import { useWalletModal } from '../../context/WalletModalContext';
 
