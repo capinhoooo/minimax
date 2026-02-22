@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -136,6 +137,14 @@ contract BattleArena is IBattleArena, IERC721Receiver, ReentrancyGuard, Pausable
     /// @notice Unpause the contract
     function unpause() external onlyOwner {
         _unpause();
+    }
+
+    /// @notice Approve an adapter to manage NFTs held by the arena
+    /// @param nft The NFT contract (e.g. PositionManager)
+    /// @param operator The adapter to approve
+    /// @param approved Whether to approve or revoke
+    function approveAdapterForNFT(address nft, address operator, bool approved) external onlyOwner {
+        IERC721(nft).setApprovalForAll(operator, approved);
     }
 
     // ============ Battle Lifecycle ============
