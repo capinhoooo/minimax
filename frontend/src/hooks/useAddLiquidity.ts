@@ -22,17 +22,17 @@ const PERMIT2 = CONTRACTS.PERMIT2;
 const POSITION_MANAGER = CONTRACTS.POSITION_MANAGER;
 const CAMELOT_NFT_MANAGER = CONTRACTS.CAMELOT_NFT_MANAGER;
 
-// V4 WETH/USDC pool key (hooks = zero address until hook is deployed)
+// V4 WETH/USDC pool key with BattleVaultHook
 const V4_POOL_KEY: PoolKey = {
   currency0: CONTRACTS.WETH,
   currency1: CONTRACTS.USDC,
   fee: 3000,
   tickSpacing: 60,
-  hooks: '0x0000000000000000000000000000000000000000',
+  hooks: '0x51ed077265dC54B2AFdBf26181b48f7314B44A40',
 };
 
 // Far future expiration for Permit2 approvals
-const MAX_EXPIRATION = BigInt('281474976710655'); // type(uint48).max
+const MAX_EXPIRATION = 281474976710655; // type(uint48).max
 
 // ============ V4 Hook ============
 
@@ -126,8 +126,8 @@ export function useAddLiquidityV4() {
   const needsUsdcPermit2Approval = !usdcPermit2Allowance || (usdcPermit2Allowance as bigint) === 0n;
 
   // Permit2 allowance returns [amount, expiration, nonce]
-  const wethPosAmount = wethPositionAllowance ? (wethPositionAllowance as [bigint, bigint, bigint])[0] : 0n;
-  const usdcPosAmount = usdcPositionAllowance ? (usdcPositionAllowance as [bigint, bigint, bigint])[0] : 0n;
+  const wethPosAmount = wethPositionAllowance ? (wethPositionAllowance as unknown as [bigint, bigint, bigint])[0] : 0n;
+  const usdcPosAmount = usdcPositionAllowance ? (usdcPositionAllowance as unknown as [bigint, bigint, bigint])[0] : 0n;
   const needsWethPositionApproval = wethPosAmount === 0n;
   const needsUsdcPositionApproval = usdcPosAmount === 0n;
 
@@ -165,8 +165,9 @@ export function useAddLiquidityV4() {
     if (!address) return;
     resetMint();
 
-    // Use amount0Max as liquidity approximation (V4 will compute actual)
-    const liquidity = amount0Max;
+    // Liquidity of 3e12 requires ~0.00873 WETH + ~25.80 USDC (~$43 value)
+    // amount0Max/amount1Max serve as slippage limits
+    const liquidity = 3000000000000n;
 
     const unlockData = encodeMintPosition({
       poolKey: V4_POOL_KEY,
@@ -186,6 +187,7 @@ export function useAddLiquidityV4() {
       functionName: 'modifyLiquidities',
       args: [unlockData, deadline],
       chainId: arbitrumSepolia.id,
+      maxFeePerGas: 100000000n, // 0.1 gwei - safe buffer for Arbitrum Sepolia
     });
   };
 

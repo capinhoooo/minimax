@@ -130,6 +130,24 @@ export function useJoinBattle() {
   return { joinBattle, hash, isPending, isConfirming, isSuccess, error };
 }
 
+/** Update battle status (accumulate in-range time / fee data) */
+export function useUpdateBattleStatus() {
+  const { writeContract, data: hash, isPending, error } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  const updateBattleStatus = (battleId: bigint) => {
+    writeContract({
+      address: CONTRACTS.BATTLE_ARENA,
+      abi: BATTLE_ARENA_ABI,
+      functionName: 'updateBattleStatus',
+      args: [battleId],
+      chainId: arbitrumSepolia.id,
+    });
+  };
+
+  return { updateBattleStatus, hash, isPending, isConfirming, isSuccess, error };
+}
+
 /** Resolve a completed battle */
 export function useResolveBattle() {
   const { writeContract, data: hash, isPending, error } = useWriteContract();

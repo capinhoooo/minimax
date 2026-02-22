@@ -9,7 +9,6 @@ import {
   type Address,
   encodeAbiParameters,
   encodePacked,
-  concat,
 } from 'viem';
 
 // ============ Action Constants ============
@@ -20,7 +19,7 @@ export const V4_ACTIONS = {
   MINT_POSITION: 0x02,
   BURN_POSITION: 0x03,
   SETTLE_PAIR: 0x0d,
-  CLOSE_CURRENCY: 0x11,
+  CLOSE_CURRENCY: 0x12,
 } as const;
 
 // ============ Types ============
