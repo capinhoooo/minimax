@@ -58,7 +58,7 @@ class Logger {
         if (action.battleId)
             console.log(`  Battle ID:    ${action.battleId}`);
         if (action.contractType)
-            console.log(`  Contract:     ${action.contractType === 'range' ? 'Range Vault' : 'Fee Vault'}`);
+            console.log(`  Battle Type:  ${action.contractType}`);
         console.log(`  Reasoning:    ${action.reasoning}`);
         console.log(`  Status:       ${statusColor}${action.status.toUpperCase()}${LOG_COLORS.reset}`);
         if (action.txHash)
@@ -74,6 +74,10 @@ class Logger {
     // Get all action logs (for reporting)
     getActionLogs() {
         return this.actionLogs;
+    }
+    // Get most recent logs (newest first)
+    getRecentLogs(limit = 50) {
+        return this.actionLogs.slice(-limit).reverse();
     }
     // Print summary of all actions
     printSummary() {

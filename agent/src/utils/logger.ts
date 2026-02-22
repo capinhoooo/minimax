@@ -8,7 +8,7 @@ export interface AgentActionLog {
   timestamp: string;
   action: string;
   battleId?: string;
-  contractType?: 'range' | 'fee';
+  contractType?: string;
   reasoning: string;
   inputs?: Record<string, unknown>;
   outputs?: Record<string, unknown>;
@@ -84,7 +84,7 @@ class Logger {
     console.log('='.repeat(60));
     console.log(`  Timestamp:    ${action.timestamp}`);
     if (action.battleId) console.log(`  Battle ID:    ${action.battleId}`);
-    if (action.contractType) console.log(`  Contract:     ${action.contractType === 'range' ? 'Range Vault' : 'Fee Vault'}`);
+    if (action.contractType) console.log(`  Battle Type:  ${action.contractType}`);
     console.log(`  Reasoning:    ${action.reasoning}`);
     console.log(`  Status:       ${statusColor}${action.status.toUpperCase()}${LOG_COLORS.reset}`);
     if (action.txHash) console.log(`  TX Hash:      ${action.txHash}`);

@@ -6,7 +6,7 @@ export interface AgentActionLog {
     timestamp: string;
     action: string;
     battleId?: string;
-    contractType?: 'range' | 'fee';
+    contractType?: string;
     reasoning: string;
     inputs?: Record<string, unknown>;
     outputs?: Record<string, unknown>;
@@ -27,6 +27,7 @@ declare class Logger {
     success(message: string, data?: unknown): void;
     logAction(action: AgentActionLog): void;
     getActionLogs(): AgentActionLog[];
+    getRecentLogs(limit?: number): AgentActionLog[];
     printSummary(): void;
 }
 export declare const logger: Logger;
