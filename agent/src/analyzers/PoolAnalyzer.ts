@@ -1,8 +1,8 @@
 /**
- * Uniswap V4 Pool State Analyzer
+ * Pool State Analyzer for BattleArena
  *
  * Reads V4 pool state directly from PoolManager via extsload.
- * Analyzes tick position, fee performance, and liquidity depth
+ * Analyzes battle state from the unified BattleArena contract
  * to score battles and recommend strategies.
  */
 
@@ -11,17 +11,14 @@ import {
   type Address,
   encodePacked,
   keccak256,
-  pad,
   toHex,
   hexToBigInt,
-  numberToHex,
 } from 'viem';
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
 
 import PoolManagerABI from '../abis/PoolManager.json' assert { type: 'json' };
-import RangeVaultABI from '../abis/LPBattleVaultV4.json' assert { type: 'json' };
-import FeeVaultABI from '../abis/LPFeeBattleV4.json' assert { type: 'json' };
+import BattleArenaABI from '../abis/BattleArena.json' assert { type: 'json' };
 
 // ============ Types ============
 
@@ -34,33 +31,61 @@ export interface PoolState {
 
 export interface PositionAnalysis {
   isInRange: boolean;
-  tickDistance: number;         // How far current tick is from position center
-  rangeWidth: number;           // tickUpper - tickLower
-  positionInRange: number;      // 0-1, where in the range the tick sits
+  tickDistance: number;
+  rangeWidth: number;
+  positionInRange: number;
 }
 
 export interface BattleAnalysis {
   battleId: bigint;
-  vaultType: 'range' | 'fee';
-  status: string;
+  battleType: number;        // 0=RANGE, 1=FEE
+  status: number;            // 0=PENDING, 1=ACTIVE, 2=EXPIRED, 3=RESOLVED
+  isExpired: boolean;
   timeRemaining: bigint;
   creatorScore: number;
   opponentScore: number;
   currentLeader: string;
+  creatorDex: string;
+  opponentDex: string;
   poolState?: PoolState;
   recommendation: string;
 }
 
-// ============ Storage Slot Constants (V4 PoolManager) ============
-// Pool.State is stored at: pools[poolId] which maps to slot keccak256(poolId . POOLS_SLOT)
-// POOLS_SLOT in PoolManager is slot 6 (after transient storage vars)
-const POOLS_MAPPING_SLOT = 6n;
+export interface WinProbability {
+  creatorProbability: number;  // 0-1
+  opponentProbability: number; // 0-1
+  reasoning: string;
+  factors: {
+    inRangeTimeFactor?: number;
+    rangeWidthFactor?: number;
+    elapsedTimeFactor?: number;
+    dexFactor?: string;
+  };
+}
 
-// Offsets within Pool.State struct:
-// slot0: sqrtPriceX96 (160) | tick (24) | protocolFee (24) | lpFee (24) | 0 (24)
-// slot1: feeGrowthGlobal0X128
-// slot2: feeGrowthGlobal1X128
-// slot3: liquidity (128)
+export interface BattleInfoLike {
+  id: bigint;
+  creator: string;
+  opponent: string;
+  battleType: number;
+  status: number;
+  startTime: bigint;
+  duration: bigint;
+  creatorInRangeTime: bigint;
+  opponentInRangeTime: bigint;
+  lastUpdateTime: bigint;
+}
+
+// ============ Constants ============
+
+const BATTLE_STATUS_NAMES = ['PENDING', 'ACTIVE', 'EXPIRED', 'RESOLVED'];
+const BATTLE_TYPE_NAMES = ['RANGE', 'FEE'];
+const DEX_TYPE_NAMES = ['UNISWAP_V4', 'CAMELOT_V3'];
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+// Storage Slot Constants (V4 PoolManager)
+const POOLS_MAPPING_SLOT = 6n;
 
 export class PoolAnalyzer {
   private publicClient: PublicClient;
@@ -71,12 +96,7 @@ export class PoolAnalyzer {
 
   // ============ Pool State Reading ============
 
-  /**
-   * Compute the storage slot for a pool's slot0 data
-   */
   private computePoolSlot0(poolId: `0x${string}`): `0x${string}` {
-    // mapping(PoolId => Pool.State) at slot POOLS_MAPPING_SLOT
-    // slot = keccak256(poolId . POOLS_MAPPING_SLOT)
     return keccak256(
       encodePacked(
         ['bytes32', 'uint256'],
@@ -85,9 +105,6 @@ export class PoolAnalyzer {
     );
   }
 
-  /**
-   * Read pool slot0 (sqrtPriceX96, tick, protocolFee, lpFee) via extsload
-   */
   async getPoolState(poolId: `0x${string}`): Promise<PoolState | null> {
     try {
       const slot = this.computePoolSlot0(poolId);
@@ -99,36 +116,24 @@ export class PoolAnalyzer {
         args: [slot],
       }) as `0x${string}`;
 
-      // Parse slot0: packed as uint160 sqrtPriceX96 | int24 tick | uint24 protocolFee | uint24 lpFee
-      // The data is stored right-aligned in the 32-byte slot
       const raw = hexToBigInt(data);
 
       const sqrtPriceX96 = raw & ((1n << 160n) - 1n);
       const tick = Number((raw >> 160n) & ((1n << 24n) - 1n));
-      // Handle signed int24
       const signedTick = tick > 0x7FFFFF ? tick - 0x1000000 : tick;
       const protocolFee = Number((raw >> 184n) & ((1n << 24n) - 1n));
       const lpFee = Number((raw >> 208n) & ((1n << 24n) - 1n));
 
-      return {
-        sqrtPriceX96,
-        tick: signedTick,
-        protocolFee,
-        lpFee,
-      };
+      return { sqrtPriceX96, tick: signedTick, protocolFee, lpFee };
     } catch (error) {
       logger.debug(`Failed to read pool state for ${poolId}`, error);
       return null;
     }
   }
 
-  /**
-   * Read pool total liquidity
-   */
   async getPoolLiquidity(poolId: `0x${string}`): Promise<bigint | null> {
     try {
       const slot0 = this.computePoolSlot0(poolId);
-      // Liquidity is at offset 3 from the pool state base slot
       const liquiditySlot = toHex(hexToBigInt(slot0) + 3n, { size: 32 });
 
       const data = await this.publicClient.readContract({
@@ -147,258 +152,247 @@ export class PoolAnalyzer {
 
   // ============ Position Analysis ============
 
-  /**
-   * Check if a position's tick range contains the current pool tick
-   */
   isPositionInRange(currentTick: number, tickLower: number, tickUpper: number): boolean {
     return currentTick >= tickLower && currentTick < tickUpper;
   }
 
-  /**
-   * Analyze a position relative to the current pool state
-   */
   analyzePosition(currentTick: number, tickLower: number, tickUpper: number): PositionAnalysis {
     const isInRange = this.isPositionInRange(currentTick, tickLower, tickUpper);
     const rangeWidth = tickUpper - tickLower;
     const rangeMid = tickLower + rangeWidth / 2;
     const tickDistance = Math.abs(currentTick - rangeMid);
 
-    // Position within range: 0 = at lower bound, 1 = at upper bound
     let positionInRange = (currentTick - tickLower) / rangeWidth;
     positionInRange = Math.max(0, Math.min(1, positionInRange));
 
-    return {
-      isInRange,
-      tickDistance,
-      rangeWidth,
-      positionInRange,
-    };
+    return { isInRange, tickDistance, rangeWidth, positionInRange };
   }
 
-  /**
-   * Calculate approximate price from sqrtPriceX96
-   * Returns price of token1 in terms of token0
-   */
   sqrtPriceToPrice(sqrtPriceX96: bigint, decimals0: number = 18, decimals1: number = 18): number {
     const Q96 = 2n ** 96n;
-    // price = (sqrtPrice / 2^96)^2 * 10^(decimals0 - decimals1)
     const priceNum = Number(sqrtPriceX96) / Number(Q96);
     const price = priceNum * priceNum;
     return price * Math.pow(10, decimals0 - decimals1);
   }
 
+  // ============ Win Probability ============
+
+  calculateWinProbability(battle: BattleInfoLike): WinProbability {
+    // FEE battles - winner determined at resolution
+    if (battle.battleType === 1) {
+      return {
+        creatorProbability: 0.5,
+        opponentProbability: 0.5,
+        reasoning: 'Fee battle winner determined at resolution based on accumulated fees. No prediction available.',
+        factors: { dexFactor: 'fee_battle' },
+      };
+    }
+
+    // RANGE battles
+    const elapsed = battle.lastUpdateTime - battle.startTime;
+
+    if (elapsed === 0n) {
+      return {
+        creatorProbability: 0.5,
+        opponentProbability: 0.5,
+        reasoning: 'Battle just started, no in-range data yet. Equal probability.',
+        factors: { inRangeTimeFactor: 0, elapsedTimeFactor: 0 },
+      };
+    }
+
+    const elapsedNum = Number(elapsed);
+    const durationNum = Number(battle.duration);
+    const creatorInRange = Number(battle.creatorInRangeTime);
+    const opponentInRange = Number(battle.opponentInRangeTime);
+
+    const creatorPct = creatorInRange / elapsedNum;
+    const opponentPct = opponentInRange / elapsedNum;
+
+    if (creatorPct === 0 && opponentPct === 0) {
+      return {
+        creatorProbability: 0.5,
+        opponentProbability: 0.5,
+        reasoning: 'Neither player has accumulated in-range time. Equal probability.',
+        factors: { inRangeTimeFactor: 0, elapsedTimeFactor: elapsedNum / durationNum },
+      };
+    }
+
+    const total = creatorPct + opponentPct;
+    const rawCreatorProb = creatorPct / total;
+    const rawOpponentProb = opponentPct / total;
+
+    const elapsedRatio = Math.min(1, elapsedNum / durationNum);
+    let confidence: number;
+    if (elapsedRatio < 0.25) {
+      confidence = elapsedRatio / 0.25 * 0.5;
+    } else if (elapsedRatio > 0.75) {
+      confidence = 0.5 + ((elapsedRatio - 0.75) / 0.25) * 0.5;
+    } else {
+      confidence = 0.5;
+    }
+
+    const creatorProbability = 0.5 * (1 - confidence) + rawCreatorProb * confidence;
+    const opponentProbability = 0.5 * (1 - confidence) + rawOpponentProb * confidence;
+
+    const elapsedPctStr = (elapsedRatio * 100).toFixed(1);
+    const creatorPctStr = (creatorPct * 100).toFixed(1);
+    const opponentPctStr = (opponentPct * 100).toFixed(1);
+    const leader = creatorProbability > opponentProbability ? 'Creator' : 'Opponent';
+    const leadProb = Math.max(creatorProbability, opponentProbability);
+
+    const reasoning = `${elapsedPctStr}% of battle elapsed. ` +
+      `Creator in-range ${creatorPctStr}%, Opponent in-range ${opponentPctStr}%. ` +
+      `${leader} leads with ${(leadProb * 100).toFixed(1)}% win probability ` +
+      `(confidence: ${(confidence * 100).toFixed(0)}%).`;
+
+    return {
+      creatorProbability,
+      opponentProbability,
+      reasoning,
+      factors: { inRangeTimeFactor: total, elapsedTimeFactor: elapsedRatio },
+    };
+  }
+
   // ============ Battle Analysis ============
 
   /**
-   * Analyze a range vault battle using on-chain performance data
+   * Analyze any battle from the BattleArena contract
    */
-  async analyzeRangeBattle(battleId: bigint): Promise<BattleAnalysis | null> {
+  async analyzeBattle(battleId: bigint): Promise<BattleAnalysis | null> {
     try {
-      // Read battle data
-      const battle = await this.publicClient.readContract({
-        address: config.rangeVaultAddress as Address,
-        abi: RangeVaultABI,
+      const result = await this.publicClient.readContract({
+        address: config.battleArenaAddress as Address,
+        abi: BattleArenaABI,
         functionName: 'getBattle',
         args: [battleId],
-      }) as [Address, Address, Address, bigint, bigint, bigint, bigint, bigint, boolean, string];
-
-      const status = battle[9];
-      const isResolved = battle[8];
-
-      if (isResolved) {
-        return {
-          battleId,
-          vaultType: 'range',
-          status,
-          timeRemaining: 0n,
-          creatorScore: 0,
-          opponentScore: 0,
-          currentLeader: battle[2], // winner
-          recommendation: 'Battle already resolved',
-        };
-      }
-
-      // Get time remaining
-      const timeRemaining = await this.publicClient.readContract({
-        address: config.rangeVaultAddress as Address,
-        abi: RangeVaultABI,
-        functionName: 'getTimeRemaining',
-        args: [battleId],
-      }) as bigint;
-
-      // Get current performance if opponent has joined
-      let creatorScore = 0;
-      let opponentScore = 0;
-      let currentLeader = '';
-      let recommendation = '';
-
-      if (battle[1] !== '0x0000000000000000000000000000000000000000') {
-        try {
-          const perf = await this.publicClient.readContract({
-            address: config.rangeVaultAddress as Address,
-            abi: RangeVaultABI,
-            functionName: 'getCurrentPerformance',
-            args: [battleId],
-          }) as [boolean, boolean, bigint, bigint, Address];
-
-          const creatorInRange = perf[0];
-          const opponentInRange = perf[1];
-          const creatorTime = Number(perf[2]);
-          const opponentTime = Number(perf[3]);
-          currentLeader = perf[4];
-
-          creatorScore = creatorTime;
-          opponentScore = opponentTime;
-
-          if (timeRemaining === 0n) {
-            recommendation = 'RESOLVE NOW - Battle expired, earn resolver reward';
-          } else if (creatorInRange && opponentInRange) {
-            recommendation = 'Both in range - close battle';
-          } else if (!creatorInRange && !opponentInRange) {
-            recommendation = 'Both out of range - waiting for tick movement';
-          } else {
-            const leader = creatorTime > opponentTime ? 'Creator' : 'Opponent';
-            recommendation = `${leader} leading with ${Math.max(creatorTime, opponentTime)}s in-range time`;
-          }
-        } catch {
-          recommendation = 'Performance data unavailable';
-        }
-      } else {
-        recommendation = 'PENDING - Waiting for opponent to join';
-      }
-
-      return {
-        battleId,
-        vaultType: 'range',
-        status,
-        timeRemaining,
-        creatorScore,
-        opponentScore,
-        currentLeader,
-        recommendation,
+      }) as {
+        creator: Address;
+        opponent: Address;
+        winner: Address;
+        creatorDex: number;
+        opponentDex: number;
+        creatorTokenId: bigint;
+        opponentTokenId: bigint;
+        creatorValueUSD: bigint;
+        opponentValueUSD: bigint;
+        battleType: number;
+        status: number;
+        startTime: bigint;
+        duration: bigint;
+        token0: Address;
+        token1: Address;
+        creatorInRangeTime: bigint;
+        opponentInRangeTime: bigint;
+        lastUpdateTime: bigint;
       };
-    } catch (error) {
-      logger.error(`Failed to analyze range battle ${battleId}`, error);
-      return null;
-    }
-  }
 
-  /**
-   * Analyze a fee vault battle using on-chain fee performance data
-   */
-  async analyzeFeeBattle(battleId: bigint): Promise<BattleAnalysis | null> {
-    try {
-      const battle = await this.publicClient.readContract({
-        address: config.feeVaultAddress as Address,
-        abi: FeeVaultABI,
-        functionName: 'getBattle',
-        args: [battleId],
-      }) as [Address, Address, Address, bigint, bigint, bigint, bigint, bigint, bigint, boolean, string];
+      const battleType = Number(result.battleType);
+      const status = Number(result.status);
+      const creatorDex = DEX_TYPE_NAMES[Number(result.creatorDex)] ?? 'UNKNOWN';
+      const opponentDex = DEX_TYPE_NAMES[Number(result.opponentDex)] ?? 'UNKNOWN';
 
-      const status = battle[10];
-      const isResolved = battle[9];
+      // Check if battle is expired
+      let isExpired = status >= 2; // EXPIRED or RESOLVED
+      if (status === 1 && result.startTime > 0n) {
+        // ACTIVE but possibly time-elapsed
+        try {
+          isExpired = await this.publicClient.readContract({
+            address: config.battleArenaAddress as Address,
+            abi: BattleArenaABI,
+            functionName: 'isBattleExpired',
+            args: [battleId],
+          }) as boolean;
+        } catch {
+          // If check fails, compute locally
+          const endTime = result.startTime + result.duration;
+          const now = BigInt(Math.floor(Date.now() / 1000));
+          isExpired = now >= endTime;
+        }
+      }
 
-      if (isResolved) {
+      // Compute time remaining
+      let timeRemaining = 0n;
+      if (status < 2 && result.startTime > 0n) {
+        const endTime = result.startTime + result.duration;
+        const now = BigInt(Math.floor(Date.now() / 1000));
+        timeRemaining = endTime > now ? endTime - now : 0n;
+      } else if (status === 0) {
+        timeRemaining = result.duration; // PENDING - duration is the full time
+      }
+
+      // Already resolved
+      if (status === 3) {
         return {
           battleId,
-          vaultType: 'fee',
+          battleType,
           status,
+          isExpired: true,
           timeRemaining: 0n,
           creatorScore: 0,
           opponentScore: 0,
-          currentLeader: battle[2],
-          recommendation: 'Battle already resolved',
+          currentLeader: result.winner,
+          creatorDex,
+          opponentDex,
+          recommendation: `Battle resolved. Winner: ${result.winner.slice(0, 12)}...`,
         };
       }
-
-      const timeRemaining = await this.publicClient.readContract({
-        address: config.feeVaultAddress as Address,
-        abi: FeeVaultABI,
-        functionName: 'getTimeRemaining',
-        args: [battleId],
-      }) as bigint;
 
       let creatorScore = 0;
       let opponentScore = 0;
       let currentLeader = '';
       let recommendation = '';
 
-      if (battle[1] !== '0x0000000000000000000000000000000000000000') {
-        try {
-          const perf = await this.publicClient.readContract({
-            address: config.feeVaultAddress as Address,
-            abi: FeeVaultABI,
-            functionName: 'getCurrentFeePerformance',
-            args: [battleId],
-          }) as [bigint, bigint, bigint, bigint, Address];
+      const hasOpponent = result.opponent !== ZERO_ADDRESS;
 
-          creatorScore = Number(perf[2]); // creatorFeeRate
-          opponentScore = Number(perf[3]); // opponentFeeRate
-          currentLeader = perf[4];
+      if (!hasOpponent) {
+        recommendation = 'PENDING - Waiting for opponent to join';
+      } else if (isExpired) {
+        recommendation = 'RESOLVE NOW - Battle expired, earn resolver reward';
+      } else if (battleType === 0) {
+        // RANGE battle - use in-range time from contract
+        creatorScore = Number(result.creatorInRangeTime);
+        opponentScore = Number(result.opponentInRangeTime);
+        currentLeader = creatorScore >= opponentScore ? result.creator : result.opponent;
 
-          if (timeRemaining === 0n) {
-            recommendation = 'RESOLVE NOW - Battle expired, earn resolver reward';
-          } else {
-            const leader = creatorScore > opponentScore ? 'Creator' : 'Opponent';
-            recommendation = `${leader} leading on fee accumulation rate`;
-          }
-        } catch {
-          recommendation = 'Fee performance data unavailable';
+        if (creatorScore === opponentScore) {
+          recommendation = 'Tied on in-range time';
+        } else {
+          const leader = creatorScore > opponentScore ? 'Creator' : 'Opponent';
+          recommendation = `${leader} leading with ${Math.max(creatorScore, opponentScore)}s in-range time`;
         }
       } else {
-        recommendation = 'PENDING - Waiting for opponent to join';
+        // FEE battle - scores are determined at resolution by scoring engine
+        recommendation = 'Fee battle in progress - winner determined at resolution';
+        currentLeader = result.creator; // Placeholder
       }
 
       return {
         battleId,
-        vaultType: 'fee',
+        battleType,
         status,
+        isExpired,
         timeRemaining,
         creatorScore,
         opponentScore,
         currentLeader,
+        creatorDex,
+        opponentDex,
         recommendation,
       };
     } catch (error) {
-      logger.error(`Failed to analyze fee battle ${battleId}`, error);
+      logger.error(`Failed to analyze battle ${battleId}`, error);
       return null;
     }
-  }
-
-  /**
-   * Get pending battles (waiting for opponent) from both vaults
-   */
-  async getPendingBattles(): Promise<{ range: bigint[]; fee: bigint[] }> {
-    const [rangePending, feePending] = await Promise.all([
-      this.publicClient.readContract({
-        address: config.rangeVaultAddress as Address,
-        abi: RangeVaultABI,
-        functionName: 'getPendingBattles',
-      }).catch(() => [] as bigint[]),
-      this.publicClient.readContract({
-        address: config.feeVaultAddress as Address,
-        abi: FeeVaultABI,
-        functionName: 'getPendingBattles',
-      }).catch(() => [] as bigint[]),
-    ]);
-
-    return {
-      range: rangePending as bigint[],
-      fee: feePending as bigint[],
-    };
   }
 
   /**
    * Score a battle's attractiveness for entry (0-100)
-   * Higher = more attractive to join
    */
   scoreBattleForEntry(analysis: BattleAnalysis): number {
-    let score = 50; // base
+    let score = 50;
 
-    // Pending battles are joinable
-    if (analysis.status !== 'waiting_for_opponent') return 0;
+    if (analysis.status !== 0) return 0; // Only PENDING battles are joinable
 
-    // Shorter duration = less risk
     const durationHours = Number(analysis.timeRemaining) / 3600;
     if (durationHours <= 1) score += 20;
     else if (durationHours <= 6) score += 10;
@@ -413,9 +407,6 @@ export class PoolAnalyzer {
     const C = {
       reset: '\x1b[0m',
       cyan: '\x1b[36m',
-      green: '\x1b[32m',
-      yellow: '\x1b[33m',
-      gray: '\x1b[90m',
     };
 
     console.log(`\n${C.cyan}  Pool: ${poolId.slice(0, 18)}...${C.reset}`);
@@ -431,17 +422,18 @@ export class PoolAnalyzer {
       cyan: '\x1b[36m',
       green: '\x1b[32m',
       yellow: '\x1b[33m',
-      red: '\x1b[31m',
       gray: '\x1b[90m',
     };
 
-    const statusColor = analysis.status === 'ready_to_resolve' ? C.green
-      : analysis.status === 'ongoing' ? C.yellow
-      : analysis.status === 'waiting_for_opponent' ? C.cyan
+    const statusStr = BATTLE_STATUS_NAMES[analysis.status] ?? 'UNKNOWN';
+    const typeStr = BATTLE_TYPE_NAMES[analysis.battleType] ?? 'UNKNOWN';
+    const statusColor = analysis.isExpired ? C.green
+      : analysis.status === 1 ? C.yellow
+      : analysis.status === 0 ? C.cyan
       : C.gray;
 
-    console.log(`\n  Battle #${analysis.battleId} ${C.gray}(${analysis.vaultType} vault)${C.reset}`);
-    console.log(`    Status:         ${statusColor}${analysis.status}${C.reset}`);
+    console.log(`\n  Battle #${analysis.battleId} ${C.gray}(${typeStr} | ${analysis.creatorDex} vs ${analysis.opponentDex})${C.reset}`);
+    console.log(`    Status:         ${statusColor}${statusStr}${analysis.isExpired && analysis.status !== 3 ? ' (EXPIRED)' : ''}${C.reset}`);
     if (analysis.timeRemaining > 0n) {
       const mins = Number(analysis.timeRemaining) / 60;
       console.log(`    Time Remaining: ${mins.toFixed(1)} minutes`);
