@@ -1,4 +1,3 @@
-import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,7 +8,7 @@ import WalletModal from './components/wallet/WalletModal';
 // Layout
 import Layout from './components/layout/Layout';
 
-// Pages (eager)
+// Pages
 import Home from './pages/Home';
 import BattleArena from './pages/Battle/BattleArena';
 import BattleDetail from './pages/Battle/BattleDetail';
@@ -18,9 +17,7 @@ import Profile from './pages/Profile';
 import Leaderboard from './pages/Leaderboard';
 import Lobby from './pages/Lobby';
 import Agent from './pages/Agent';
-
-// Lazy-loaded (LI.FI widget is large ~2MB)
-const Swap = lazy(() => import('./pages/Swap'));
+import Liquidity from './pages/Liquidity';
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -46,10 +43,9 @@ function App() {
               <Route path="battle/:id" element={<BattleDetail />} />
               <Route path="battle/create" element={<CreateBattle />} />
               <Route path="leaderboard" element={<Leaderboard />} />
-              <Route path="swap" element={<Suspense fallback={<div className="flex items-center justify-center min-h-screen"><span className="text-sm font-mono text-gray-500 tracking-wider">LOADING SWAP ENGINE...</span></div>}><Swap /></Suspense>} />
-              <Route path="bridge" element={<Suspense fallback={<div className="flex items-center justify-center min-h-screen"><span className="text-sm font-mono text-gray-500 tracking-wider">LOADING BRIDGE...</span></div>}><Swap /></Suspense>} />
               <Route path="lobby" element={<Lobby />} />
               <Route path="agent" element={<Agent />} />
+              <Route path="liquidity" element={<Liquidity />} />
               <Route path="profile" element={<Profile />} />
             </Route>
           </Routes>
